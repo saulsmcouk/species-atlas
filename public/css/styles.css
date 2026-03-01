@@ -1583,6 +1583,7 @@ section {
   position: sticky;
   top: var(--space-lg);
   box-shadow: 0 4px 20px rgba(93, 78, 55, 0.1);
+  box-sizing: border-box;
 }
 
 .filters-title {
@@ -1655,6 +1656,11 @@ section {
   display: flex;
   gap: var(--space-sm);
   margin-top: var(--space-lg);
+}
+
+.filter-actions .btn {
+  flex: 1;
+  min-width: 0;
 }
 
 /* Buttons */
