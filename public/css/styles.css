@@ -307,6 +307,54 @@ h3 {
   opacity: 1;
 }
 
+/* Bird Toggle Button */
+.bird-toggle {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 1000;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(248, 244, 235, 0.8);
+  color: var(--sepia-light);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(93, 78, 55, 0.15);
+  backdrop-filter: blur(4px);
+}
+
+.bird-toggle:hover {
+  background: rgba(248, 244, 235, 0.95);
+  color: var(--burnt-sienna);
+  transform: scale(1.1);
+}
+
+.bird-toggle svg {
+  display: none;
+}
+
+.bird-toggle-text {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.bird-toggle.birds-hidden {
+  opacity: 0.5;
+}
+
+.bird-toggle.birds-hidden .bird-toggle-text {
+  filter: grayscale(1);
+}
+
+.flying-birds.hidden {
+  display: none;
+}
+
 /* ==========================================================================
    Floating Seeds/Particles
    ========================================================================== */

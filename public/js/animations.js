@@ -288,6 +288,30 @@ function animateCounter(element, target, duration = 2000) {
   update();
 }
 
+// Bird toggle functionality
+function initBirdToggle() {
+  const toggle = document.getElementById('bird-toggle');
+  const birdsContainer = document.getElementById('flying-birds');
+  
+  if (!toggle || !birdsContainer) return;
+  
+  // Check localStorage for saved preference
+  const birdsHidden = localStorage.getItem('birdsHidden') === 'true';
+  if (birdsHidden) {
+    birdsContainer.classList.add('hidden');
+    toggle.classList.add('birds-hidden');
+  }
+  
+  toggle.addEventListener('click', () => {
+    const isHidden = birdsContainer.classList.toggle('hidden');
+    toggle.classList.toggle('birds-hidden', isHidden);
+    localStorage.setItem('birdsHidden', isHidden);
+  });
+}
+
+// Initialize bird toggle when DOM is ready
+document.addEventListener('DOMContentLoaded', initBirdToggle);
+
 // Export for use in main app
 window.FlyingBirds = FlyingBirds;
 window.FloatingParticles = FloatingParticles;
