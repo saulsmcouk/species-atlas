@@ -100,16 +100,17 @@ class FlyingBirds {
     bird.innerHTML = Math.random() > 0.5 ? WOODLARK_SVG : SOARING_SVG;
     
     // Starting position (left or right side)
-    const fromLeft = Math.random() > 0.5;
-    const startX = fromLeft ? -100 : window.innerWidth + 100;
-    const endX = fromLeft ? window.innerWidth + 100 : -100;
+    // Bird SVG faces left, so start from right side and fly left
+    const fromRight = Math.random() > 0.5;
+    const startX = fromRight ? window.innerWidth + 100 : -100;
+    const endX = fromRight ? -100 : window.innerWidth + 100;
     const startY = 50 + Math.random() * (window.innerHeight * 0.4);
     
     bird.style.left = `${startX}px`;
     bird.style.top = `${startY}px`;
     
-    // Flip bird if flying left to right (bird SVG faces left by default)
-    if (fromLeft) {
+    // Flip bird if flying right (bird SVG faces left by default)
+    if (!fromRight) {
       bird.style.transform = 'scaleX(-1)';
     }
     
@@ -145,7 +146,7 @@ class FlyingBirds {
       
       // Subtle rotation based on wobble direction
       const rotation = Math.sin(progress * Math.PI * 4) * 10;
-      const scaleX = fromLeft ? 1 : -1;
+      const scaleX = fromRight ? 1 : -1;
       bird.style.transform = `scaleX(${scaleX}) rotate(${rotation}deg)`;
       
       requestAnimationFrame(animate);
