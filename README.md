@@ -1,6 +1,6 @@
 # NBN Atlas Species Explorer
 
-An interactive data visualization for exploring any species from the NBN Atlas - the UK's largest collection of biodiversity data. Search for any species and visualize their occurrence records with beautiful maps, timelines, and statistical insights.
+An interactive data visualization for exploring any species from the [NBN Atlas](https://nbnatlas.org/). Search for any species and visualize their occurrence records with beautiful maps, timelines, and statistical insights.
 
 ![NBN Atlas Explorer](https://img.shields.io/badge/Species-Any-green) ![Data Source](https://img.shields.io/badge/Source-NBN%20Atlas-blue) ![License](https://img.shields.io/badge/License-MIT-yellow)
 
