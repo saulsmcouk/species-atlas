@@ -66,7 +66,7 @@ Open http://localhost:3000 in your browser.
 ## Project Structure
 
 ```
-nbn-atlas-viewer/
+species-atlas/
 ├── public/
 │   ├── index.html          # Main SPA with landing page + visualization
 │   ├── css/
