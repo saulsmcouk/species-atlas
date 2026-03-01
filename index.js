@@ -26,7 +26,8 @@ app.get('/api/species/search', async (req, res) => {
   try {
     const query = encodeURIComponent(req.query.q || '');
     const pageSize = req.query.pageSize || 10;
-    const url = `${SPECIES_API}/search?q=${query}&pageSize=${pageSize}&fq=rank:species`;
+    // Use wildcard for partial matching of both common and scientific names
+    const url = `${SPECIES_API}/search?q=*${query}*&pageSize=${pageSize}&fq=rank:species`;
     
     const response = await fetch(url);
     const data = await response.json();

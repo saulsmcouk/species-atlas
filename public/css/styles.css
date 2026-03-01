@@ -1981,6 +1981,7 @@ section {
 /* Search Box */
 .search-container {
   position: relative;
+  z-index: 500;
   width: 100%;
   max-width: 600px;
   margin: 0 auto var(--space-md);
@@ -2060,7 +2061,7 @@ section {
   box-shadow: 0 8px 32px rgba(93, 78, 55, 0.2);
   max-height: 400px;
   overflow-y: auto;
-  z-index: 100;
+  z-index: 1000;
 }
 
 .search-results.hidden {
