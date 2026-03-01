@@ -1545,7 +1545,7 @@ class SpeciesExplorer {
     this.explorerPage = 1;
     this.explorerPageSize = 50;
     this.explorerSort = { key: 'year', dir: 'desc' };
-    this.filteredData = [...this.data.occurrences];
+    this.filteredData = [...this.getFilteredOccurrences()];
     
     this.populateRegionFilter();
     this.bindExplorerEvents();
@@ -1641,7 +1641,8 @@ class SpeciesExplorer {
       winter: [12, 1, 2]
     };
     
-    this.filteredData = this.data.occurrences.filter(occ => {
+    // Start from location-filtered occurrences, then apply explorer filters
+    this.filteredData = this.getFilteredOccurrences().filter(occ => {
       if (yearMin && occ.year < yearMin) return false;
       if (yearMax && occ.year > yearMax) return false;
       if (region && occ.stateProvince !== region) return false;
@@ -1675,7 +1676,8 @@ class SpeciesExplorer {
     if (month) month.value = '';
     if (season) season.value = '';
     
-    this.filteredData = [...this.data.occurrences];
+    // Reset to location-filtered occurrences (respects current location filter)
+    this.filteredData = [...this.getFilteredOccurrences()];
     this.explorerPage = 1;
     this.sortFilteredData();
     this.updateExplorerTable();

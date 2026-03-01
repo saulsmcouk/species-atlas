@@ -39,7 +39,13 @@ An interactive data visualization for exploring any species from the [NBN Atlas]
 
 ## Quick Start
 
+Requires [Node.js](https://nodejs.org/) (v18 or later recommended).
+
 ```bash
+# Clone the repository
+git clone https://github.com/saulsmcouk/species-atlas.git
+cd species-atlas
+
 # Install dependencies
 npm install
 
