@@ -83,12 +83,20 @@ The Express server proxies requests to NBN Atlas:
 - Node.js 18+ (uses native fetch)
 - npm
 
+## Data License
+
+All occurrence data from the NBN Atlas is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). When using or citing this data, please acknowledge the NBN Atlas and its data partners.
+
+For more information, see:
+- [NBN Atlas Terms of Use](https://docs.nbnatlas.org/nbn-atlas-terms-of-use/)
+- [Data Partners Registry](https://registry.nbnatlas.org/)
+
 ## License
 
-MIT
+This visualization tool is MIT licensed. NBN Atlas data remains under CC BY 4.0.
 
 ## Acknowledgments
 
-- Data provided by the [NBN Atlas](https://nbnatlas.org/)
+- Data provided by the [NBN Atlas](https://nbnatlas.org/) under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
 - Map tiles by [OpenStreetMap](https://www.openstreetmap.org/copyright)
 - Built with 🤍 for nature
