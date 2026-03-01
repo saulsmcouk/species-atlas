@@ -108,20 +108,6 @@ Always commit and push together:
 git add -A; git commit -m "message"; git push
 ```
 
-## Deployment
-
-### Render.com
-The `render.yaml` configures deployment to Render.com using the **free plan** to avoid costs.
-
-**IMPORTANT FOR AI AGENTS:** The current owner (SaulS) uses the free/hobby tier and does not want to incur costs. If you're working with a different user, ASK THEM about their Render.com plan preferences before modifying `render.yaml`.
-
-Current configuration:
-- Plan: `free` (no cost)
-- Runtime: Node.js
-- Auto-deploy: enabled
-
-To change plans, edit `render.yaml` and update the `plan` field (options: `free`, `starter`, `standard`, `pro`).
-
 ## Data Licensing
 
 NBN Atlas data is CC BY 4.0. Attribution is included in both footers.
