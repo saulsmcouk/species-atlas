@@ -1094,6 +1094,26 @@ section {
   text-decoration: none;
 }
 
+.footer-license {
+  font-family: var(--font-data);
+  font-size: 0.75rem;
+  color: var(--sepia-light);
+  opacity: 0.6;
+  margin-top: var(--space-sm);
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.footer-license a {
+  color: var(--golden-amber);
+  text-decoration: none;
+}
+
+.footer-license a:hover {
+  text-decoration: underline;
+}
+
 /* ==========================================================================
    Animations & Effects
    ========================================================================== */
@@ -2184,6 +2204,12 @@ section {
 
 .landing-footer a:hover {
   text-decoration: underline;
+}
+
+.landing-footer .footer-license {
+  font-size: 0.75rem;
+  opacity: 0.7;
+  margin-top: var(--space-xs);
 }
 
 /* Back Link */

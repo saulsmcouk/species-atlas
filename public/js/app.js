@@ -53,6 +53,17 @@ class SpeciesExplorer {
     document.getElementById('visualization-view').classList.add('hidden');
     document.getElementById('loading-overlay').classList.add('hidden');
     document.title = 'NBN Atlas Species Explorer';
+    
+    // Reset year slider
+    const yearSlider = document.getElementById('year-slider');
+    const yearDisplay = document.getElementById('year-display');
+    if (yearSlider) {
+      yearSlider.value = yearSlider.max;
+    }
+    if (yearDisplay) {
+      yearDisplay.textContent = 'All Years';
+    }
+    this.currentYear = 'all';
   }
   
   showVisualization() {
