@@ -170,7 +170,7 @@ app.get('/api/species/:guid/occurrences', async (req, res) => {
 
 // Recursive function to fetch records, drilling down time granularity if needed
 // Drills: year -> month -> day if hitting 5000 offset limit
-async function fetchRecordsRecursive(guid, timeFilters, maxRecords, onProgress = null) {
+async function fetchRecordsRecursive(guid, timeFilters, maxRecords, onProgress = null, baseCount = 0) {
   const PAGE_SIZE = 1000;
   const MAX_OFFSET = 5000;
   
@@ -230,12 +230,13 @@ async function fetchRecordsRecursive(guid, timeFilters, maxRecords, onProgress =
           guid, 
           { ...timeFilters, month }, 
           maxRecords - allOccurrences.length,
-          onProgress
+          onProgress,
+          baseCount + allOccurrences.length  // Pass accumulated count for nested day drilling
         );
         allOccurrences = allOccurrences.concat(monthRecords);
         
         if (onProgress) {
-          onProgress({ level: 'month', value: month, records: allOccurrences.length });
+          onProgress({ level: 'month', value: month, records: baseCount + allOccurrences.length });
         }
       }
     } else if (!timeFilters.day) {
@@ -250,12 +251,13 @@ async function fetchRecordsRecursive(guid, timeFilters, maxRecords, onProgress =
           guid, 
           { ...timeFilters, day }, 
           maxRecords - allOccurrences.length,
-          onProgress
+          onProgress,
+          baseCount + allOccurrences.length
         );
         allOccurrences = allOccurrences.concat(dayRecords);
         
         if (onProgress) {
-          onProgress({ level: 'day', month: timeFilters.month, value: day, records: allOccurrences.length });
+          onProgress({ level: 'day', month: timeFilters.month, value: day, records: baseCount + allOccurrences.length });
         }
       }
     }
