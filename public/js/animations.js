@@ -108,8 +108,8 @@ class FlyingBirds {
     bird.style.left = `${startX}px`;
     bird.style.top = `${startY}px`;
     
-    // Flip bird if flying right to left
-    if (!fromLeft) {
+    // Flip bird if flying left to right (bird SVG faces left by default)
+    if (fromLeft) {
       bird.style.transform = 'scaleX(-1)';
     }
     
