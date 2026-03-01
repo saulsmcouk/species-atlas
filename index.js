@@ -255,7 +255,7 @@ async function fetchRecordsRecursive(guid, timeFilters, maxRecords, onProgress =
         allOccurrences = allOccurrences.concat(dayRecords);
         
         if (onProgress) {
-          onProgress({ level: 'day', value: day, records: allOccurrences.length });
+          onProgress({ level: 'day', month: timeFilters.month, value: day, records: allOccurrences.length });
         }
       }
     }
@@ -294,7 +294,8 @@ app.get('/api/species/:guid/occurrences/:year', async (req, res) => {
         if (now - lastProgressUpdate > 200) {
           res.write(`data: ${JSON.stringify({ 
             type: 'progress', 
-            level: progress.level, 
+            level: progress.level,
+            month: progress.month || null,
             value: progress.value,
             records: progress.records 
           })}\n\n`);

@@ -471,12 +471,12 @@ class SpeciesExplorer {
             const currentYearRecords = progress.records;
             this.updateProgress(fetchedCount + currentYearRecords, totalToFetch);
             
-            // Show drill level (month or day)
+            // Show drill level (month or day with month context)
             let levelText = '';
             if (progress.level === 'month') {
               levelText = `month ${progress.value}`;
             } else if (progress.level === 'day') {
-              levelText = `day ${progress.value}`;
+              levelText = `month ${progress.month} - day ${progress.value}`;
             }
             
             this.updateLoadingText(
@@ -644,7 +644,7 @@ class SpeciesExplorer {
           
           if (data.type === 'progress') {
             // Report progress with drill level (month/day)
-            onProgress({ level: data.level, value: data.value, records: data.records });
+            onProgress({ level: data.level, month: data.month, value: data.value, records: data.records });
           } else if (data.type === 'complete') {
             // All done - close connection and resolve
             eventSource.close();
