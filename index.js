@@ -169,6 +169,7 @@ app.get('/api/species/:guid/occurrences', async (req, res) => {
 });
 
 // Fetch occurrences for a single year (for progress tracking)
+// Uses month-based sub-pagination to work around NBN Atlas 5000 offset limit
 app.get('/api/species/:guid/occurrences/:year', async (req, res) => {
   try {
     const guid = req.params.guid;
@@ -177,30 +178,39 @@ app.get('/api/species/:guid/occurrences/:year', async (req, res) => {
     
     let allOccurrences = [];
     const PAGE_SIZE = 1000;
-    let startIndex = 0;
+    const MAX_OFFSET = 5000; // NBN Atlas hard limit on offset pagination
     
-    while (allOccurrences.length < maxRecords) {
-      const url = `${RECORDS_API}/occurrences/search?q=lsid:${encodeURIComponent(guid)}&fq=-occurrence_status%3A%22absent%22&fq=${UK_IRELAND_FILTER}&fq=year:${year}&pageSize=${PAGE_SIZE}&startIndex=${startIndex}`;
-      const response = await fetch(url);
-      const data = await response.json();
+    // Fetch by month to work around the 5000 offset limit per query
+    const months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
+    
+    for (const month of months) {
+      if (allOccurrences.length >= maxRecords) break;
       
-      if (!data.occurrences || data.occurrences.length === 0) break;
+      let startIndex = 0;
       
-      const occurrences = data.occurrences.map(occ => ({
-        year: parseInt(occ.year),
-        month: occ.month,
-        decimalLatitude: occ.decimalLatitude,
-        decimalLongitude: occ.decimalLongitude,
-        stateProvince: occ.stateProvince,
-        basisOfRecord: occ.basisOfRecord,
-        scientificName: occ.scientificName,
-        vernacularName: occ.vernacularName
-      }));
-      
-      allOccurrences = allOccurrences.concat(occurrences);
-      startIndex += PAGE_SIZE;
-      
-      if (data.occurrences.length < PAGE_SIZE) break;
+      while (startIndex < MAX_OFFSET && allOccurrences.length < maxRecords) {
+        const url = `${RECORDS_API}/occurrences/search?q=lsid:${encodeURIComponent(guid)}&fq=-occurrence_status%3A%22absent%22&fq=${UK_IRELAND_FILTER}&fq=year:${year}&fq=month:${month}&pageSize=${PAGE_SIZE}&startIndex=${startIndex}`;
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (!data.occurrences || data.occurrences.length === 0) break;
+        
+        const occurrences = data.occurrences.map(occ => ({
+          year: parseInt(occ.year),
+          month: occ.month,
+          decimalLatitude: occ.decimalLatitude,
+          decimalLongitude: occ.decimalLongitude,
+          stateProvince: occ.stateProvince,
+          basisOfRecord: occ.basisOfRecord,
+          scientificName: occ.scientificName,
+          vernacularName: occ.vernacularName
+        }));
+        
+        allOccurrences = allOccurrences.concat(occurrences);
+        startIndex += PAGE_SIZE;
+        
+        if (data.occurrences.length < PAGE_SIZE) break;
+      }
     }
     
     res.json({
