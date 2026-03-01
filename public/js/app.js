@@ -718,6 +718,10 @@ class SpeciesExplorer {
     
     const percentage = total > 0 ? (current / total) * 100 : 0;
     
+    // Store for time estimation
+    this.progressCurrent = current;
+    this.progressTotal = total;
+    
     if (progressFill) {
       progressFill.style.width = `${Math.min(percentage, 100)}%`;
     }
@@ -729,15 +733,29 @@ class SpeciesExplorer {
   
   startLoadingTimer() {
     this.loadStartTime = Date.now();
+    this.progressCurrent = 0;
+    this.progressTotal = 0;
     const timeEl = document.getElementById('loading-time');
     
     this.loadingTimerInterval = setInterval(() => {
       const elapsed = Math.floor((Date.now() - this.loadStartTime) / 1000);
       const minutes = Math.floor(elapsed / 60);
       const seconds = elapsed % 60;
+      const elapsedStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+      
+      // Calculate estimated time remaining
+      let remainingStr = '';
+      if (this.progressCurrent > 0 && this.progressTotal > 0 && this.progressCurrent < this.progressTotal) {
+        const recordsPerSecond = this.progressCurrent / elapsed;
+        const recordsRemaining = this.progressTotal - this.progressCurrent;
+        const secondsRemaining = Math.ceil(recordsRemaining / recordsPerSecond);
+        const remMinutes = Math.floor(secondsRemaining / 60);
+        const remSeconds = secondsRemaining % 60;
+        remainingStr = ` (~${remMinutes}:${remSeconds.toString().padStart(2, '0')} remaining)`;
+      }
       
       if (timeEl) {
-        timeEl.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        timeEl.textContent = elapsedStr + remainingStr;
       }
     }, 1000);
   }
