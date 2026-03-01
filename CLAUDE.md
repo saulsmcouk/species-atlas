@@ -87,7 +87,7 @@ All in `public/css/styles.css`. Major sections are commented with `/* ==========
 ## Gotchas
 
 1. **Bird SVGs face left** - When flying left-to-right, apply `scaleX(-1)` to flip
-2. **NBN Atlas API has 5000 record limit** - Must fetch year-by-year for large datasets
+2. **NBN Atlas API has 5000 record limit per request** - Server paginates automatically to fetch all records per year
 3. **Year slider resets** - Call `showLanding()` resets slider to "All Years"
 4. **Modal events only bound once** - `this.modalEventsBound` flag prevents duplicate listeners
 5. **Facet field names** - Use `stateProvince` not `state_province` for NBN Atlas

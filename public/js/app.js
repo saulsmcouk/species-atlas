@@ -420,8 +420,8 @@ class SpeciesExplorer {
         // Filter to selected year range
         for (const y of this.yearFacetData) {
           if (y.year >= options.fromYear && y.year <= options.toYear) {
-            yearCounts[y.year] = Math.min(y.count, 5000);
-            totalToFetch += Math.min(y.count, 5000);
+            yearCounts[y.year] = y.count;
+            totalToFetch += y.count;
           }
         }
       } else if (options.mode === 'record-limit') {
@@ -429,15 +429,15 @@ class SpeciesExplorer {
         const sortedYears = [...this.yearFacetData].sort((a, b) => b.year - a.year);
         for (const y of sortedYears) {
           if (totalToFetch >= options.limit) break;
-          const toFetch = Math.min(y.count, options.limit - totalToFetch, 5000);
+          const toFetch = Math.min(y.count, options.limit - totalToFetch);
           yearCounts[y.year] = toFetch;
           totalToFetch += toFetch;
         }
       } else {
         // Load all (no limit)
         for (const y of this.yearFacetData) {
-          yearCounts[y.year] = Math.min(y.count, 5000);
-          totalToFetch += Math.min(y.count, 5000);
+          yearCounts[y.year] = y.count;
+          totalToFetch += y.count;
         }
       }
       
