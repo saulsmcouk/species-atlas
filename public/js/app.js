@@ -213,6 +213,7 @@ class SpeciesExplorer {
     this.showLoading('Loading species information...');
     this.loadStartTime = Date.now();
     this.loadingTimerInterval = null;
+    this.currentGuid = guid;
     
     try {
       // Get facets first (fast) to know what we're dealing with
@@ -230,33 +231,206 @@ class SpeciesExplorer {
         commonName: ''
       };
       this.species.totalRecords = facets.totalRecords;
+      this.facetsData = facets;
       
+      // Get year breakdown from facets
+      const yearFacet = facets.facets?.find(f => f.fieldName === 'year');
+      this.yearFacetData = [];
+      
+      if (yearFacet?.fieldResult) {
+        this.yearFacetData = yearFacet.fieldResult
+          .map(y => ({ year: parseInt(y.label), count: y.count }))
+          .filter(y => !isNaN(y.year))
+          .sort((a, b) => b.year - a.year);
+      }
+      
+      // Check if we need to show the warning modal
+      const LARGE_DATASET_THRESHOLD = 50000;
+      
+      if (facets.totalRecords > LARGE_DATASET_THRESHOLD) {
+        // Hide loading, show warning modal
+        this.hideLoading();
+        this.showDatasetWarning(facets.totalRecords, this.yearFacetData);
+      } else {
+        // Proceed with loading all records
+        await this.proceedWithLoading({ mode: 'all' });
+      }
+      
+    } catch (error) {
+      console.error('Failed to load species:', error);
+      this.stopLoadingTimer();
+      this.showError(error.message);
+    }
+  }
+  
+  showDatasetWarning(totalRecords, yearData) {
+    const modal = document.getElementById('dataset-warning-modal');
+    const totalEl = document.getElementById('warning-total-records');
+    const yearFromSelect = document.getElementById('year-from');
+    const yearToSelect = document.getElementById('year-to');
+    const loadAllWarning = document.getElementById('load-all-warning');
+    
+    // Update total records display
+    if (totalEl) totalEl.textContent = totalRecords.toLocaleString();
+    
+    // Calculate estimated load time
+    const estimatedMinutes = Math.ceil(totalRecords / 10000);
+    if (loadAllWarning) {
+      loadAllWarning.textContent = `This may take ${estimatedMinutes}+ minutes`;
+    }
+    
+    // Populate year dropdowns
+    const years = yearData.map(y => y.year).sort((a, b) => a - b);
+    const minYear = years[0] || 2000;
+    const maxYear = years[years.length - 1] || new Date().getFullYear();
+    
+    yearFromSelect.innerHTML = '';
+    yearToSelect.innerHTML = '';
+    
+    for (let y = maxYear; y >= minYear; y--) {
+      yearFromSelect.innerHTML += `<option value="${y}">${y}</option>`;
+      yearToSelect.innerHTML += `<option value="${y}">${y}</option>`;
+    }
+    
+    // Default to last 5 years
+    const defaultFrom = Math.max(minYear, maxYear - 4);
+    yearFromSelect.value = defaultFrom;
+    yearToSelect.value = maxYear;
+    
+    this.updateYearEstimate();
+    
+    // Show modal
+    modal.classList.remove('hidden');
+    
+    // Bind events if not already bound
+    if (!this.modalEventsBound) {
+      this.bindModalEvents();
+      this.modalEventsBound = true;
+    }
+  }
+  
+  updateYearEstimate() {
+    const yearFromSelect = document.getElementById('year-from');
+    const yearToSelect = document.getElementById('year-to');
+    const estimateEl = document.getElementById('year-estimate');
+    
+    const fromYear = parseInt(yearFromSelect.value);
+    const toYear = parseInt(yearToSelect.value);
+    
+    let estimate = 0;
+    for (const y of this.yearFacetData) {
+      if (y.year >= fromYear && y.year <= toYear) {
+        estimate += y.count;
+      }
+    }
+    
+    if (estimateEl) {
+      estimateEl.textContent = `~${estimate.toLocaleString()} records`;
+    }
+  }
+  
+  bindModalEvents() {
+    const modal = document.getElementById('dataset-warning-modal');
+    const cancelBtn = document.getElementById('warning-cancel');
+    const proceedBtn = document.getElementById('warning-proceed');
+    const yearRangeRadio = document.getElementById('radio-year-range');
+    const recordLimitRadio = document.getElementById('radio-record-limit');
+    const loadAllRadio = document.getElementById('radio-load-all');
+    const yearRangeControls = document.getElementById('year-range-controls');
+    const recordLimitControls = document.getElementById('record-limit-controls');
+    const yearFromSelect = document.getElementById('year-from');
+    const yearToSelect = document.getElementById('year-to');
+    
+    // Radio button changes
+    const updateControlsVisibility = () => {
+      yearRangeControls.classList.toggle('hidden', !yearRangeRadio.checked);
+      recordLimitControls.classList.toggle('hidden', !recordLimitRadio.checked);
+    };
+    
+    yearRangeRadio.addEventListener('change', updateControlsVisibility);
+    recordLimitRadio.addEventListener('change', updateControlsVisibility);
+    loadAllRadio.addEventListener('change', updateControlsVisibility);
+    
+    // Year selects
+    yearFromSelect.addEventListener('change', () => this.updateYearEstimate());
+    yearToSelect.addEventListener('change', () => this.updateYearEstimate());
+    
+    // Record limit buttons
+    document.querySelectorAll('.record-limit-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.record-limit-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+    });
+    
+    // Cancel button
+    cancelBtn.addEventListener('click', () => {
+      modal.classList.add('hidden');
+      window.location.hash = '';
+    });
+    
+    // Proceed button
+    proceedBtn.addEventListener('click', () => {
+      modal.classList.add('hidden');
+      
+      let options = {};
+      
+      if (yearRangeRadio.checked) {
+        options = {
+          mode: 'year-range',
+          fromYear: parseInt(yearFromSelect.value),
+          toYear: parseInt(yearToSelect.value)
+        };
+      } else if (recordLimitRadio.checked) {
+        const activeBtn = document.querySelector('.record-limit-btn.active');
+        options = {
+          mode: 'record-limit',
+          limit: parseInt(activeBtn?.dataset.limit || 25000)
+        };
+      } else {
+        options = { mode: 'all' };
+      }
+      
+      this.showLoading('Loading occurrence data...');
+      this.proceedWithLoading(options);
+    });
+  }
+  
+  async proceedWithLoading(options) {
+    try {
       // Update hero with species info
       this.updateHero();
       this.showVisualization();
       
-      // Get year breakdown from facets
-      const yearFacet = facets.facets?.find(f => f.fieldName === 'year');
       const yearCounts = {};
       let totalToFetch = 0;
-      const maxRecords = 50000;
       
-      if (yearFacet?.fieldResult) {
-        // Sort years and calculate how many records we'll fetch
-        const sortedYears = yearFacet.fieldResult
-          .map(y => ({ year: parseInt(y.label), count: y.count }))
-          .filter(y => !isNaN(y.year))
-          .sort((a, b) => b.year - a.year); // Most recent first
-        
+      if (options.mode === 'year-range') {
+        // Filter to selected year range
+        for (const y of this.yearFacetData) {
+          if (y.year >= options.fromYear && y.year <= options.toYear) {
+            yearCounts[y.year] = Math.min(y.count, 5000);
+            totalToFetch += Math.min(y.count, 5000);
+          }
+        }
+      } else if (options.mode === 'record-limit') {
+        // Load most recent years up to limit
+        const sortedYears = [...this.yearFacetData].sort((a, b) => b.year - a.year);
         for (const y of sortedYears) {
-          if (totalToFetch >= maxRecords) break;
-          const toFetch = Math.min(y.count, maxRecords - totalToFetch, 5000);
+          if (totalToFetch >= options.limit) break;
+          const toFetch = Math.min(y.count, options.limit - totalToFetch, 5000);
           yearCounts[y.year] = toFetch;
           totalToFetch += toFetch;
         }
+      } else {
+        // Load all (no limit)
+        for (const y of this.yearFacetData) {
+          yearCounts[y.year] = Math.min(y.count, 5000);
+          totalToFetch += Math.min(y.count, 5000);
+        }
       }
       
-      const years = Object.keys(yearCounts).map(Number).sort((a, b) => b - a);
+      const years = Object.keys(yearCounts).map(Number).sort((a, b) => b.year - a.year);
       
       if (years.length === 0) {
         this.data = { totalRecords: 0, occurrences: [] };
@@ -280,7 +454,7 @@ class SpeciesExplorer {
         const maxForYear = yearCounts[year];
         
         try {
-          const occRes = await fetch(`/api/species/${encodeURIComponent(guid)}/occurrences/${year}?max=${maxForYear}`);
+          const occRes = await fetch(`/api/species/${encodeURIComponent(this.currentGuid)}/occurrences/${year}?max=${maxForYear}`);
           const occData = await occRes.json();
           
           if (occData.occurrences) {
@@ -302,13 +476,13 @@ class SpeciesExplorer {
       this.stopLoadingTimer();
       
       this.data = {
-        totalRecords: facets.totalRecords,
+        totalRecords: this.facetsData.totalRecords,
         occurrences: allOccurrences
       };
       
       // Process data
       this.processData();
-      this.processFacets(facets.facets);
+      this.processFacets(this.facetsData.facets);
       
       // Hide loading and initialize visualizations
       this.hideLoading();
@@ -326,7 +500,7 @@ class SpeciesExplorer {
       document.title = `${this.species.commonName || this.species.scientificName} | NBN Atlas Explorer`;
       
     } catch (error) {
-      console.error('Failed to load species:', error);
+      console.error('Failed to load data:', error);
       this.stopLoadingTimer();
       this.showError(error.message);
     }

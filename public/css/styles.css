@@ -1257,6 +1257,281 @@ section {
 }
 
 /* ==========================================================================
+   Large Dataset Warning Modal
+   ========================================================================== */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(45, 71, 57, 0.85);
+  backdrop-filter: blur(4px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10000;
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+
+.modal-overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.modal-content {
+  background: var(--parchment);
+  border-radius: 16px;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.3);
+  max-width: 520px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  animation: modalSlideIn 0.4s var(--ease-out-expo);
+}
+
+@keyframes modalSlideIn {
+  0% {
+    opacity: 0;
+    transform: translateY(30px) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.modal-header {
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--parchment-dark);
+  text-align: center;
+}
+
+.warning-icon {
+  font-size: 3rem;
+  margin-bottom: var(--space-xs);
+}
+
+.modal-header h2 {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  color: var(--sepia-ink);
+  margin: 0;
+}
+
+.modal-body {
+  padding: var(--space-md) var(--space-lg);
+}
+
+.warning-message {
+  text-align: center;
+  font-size: 1.1rem;
+  color: var(--sepia-light);
+  margin-bottom: var(--space-sm);
+}
+
+.warning-message strong {
+  color: var(--burnt-sienna);
+  font-weight: 600;
+}
+
+.warning-instruction {
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--sepia-light);
+  margin-bottom: var(--space-md);
+}
+
+.warning-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.warning-option {
+  background: var(--parchment-dark);
+  border: 2px solid transparent;
+  border-radius: 12px;
+  padding: var(--space-sm) var(--space-md);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.warning-option:hover {
+  border-color: var(--golden-amber);
+}
+
+.warning-option:has(input:checked) {
+  border-color: var(--burnt-sienna);
+  background: rgba(160, 82, 45, 0.08);
+}
+
+.warning-option input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.warning-option > label {
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+}
+
+.option-title {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--sepia-ink);
+}
+
+.option-desc {
+  font-size: 0.85rem;
+  color: var(--sepia-light);
+  margin-top: 2px;
+}
+
+.option-controls {
+  margin-top: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: 1px dashed var(--parchment);
+}
+
+.option-controls.hidden {
+  display: none;
+}
+
+/* Year Range Controls */
+.year-inputs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  justify-content: center;
+}
+
+.year-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.year-input-group label {
+  font-size: 0.75rem;
+  color: var(--sepia-light);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.year-select {
+  padding: 8px 12px;
+  border: 1px solid var(--golden-amber);
+  border-radius: 6px;
+  background: var(--parchment);
+  font-family: var(--font-data);
+  font-size: 0.9rem;
+  color: var(--sepia-ink);
+  min-width: 100px;
+  cursor: pointer;
+}
+
+.year-select:focus {
+  outline: none;
+  border-color: var(--burnt-sienna);
+  box-shadow: 0 0 0 3px rgba(160, 82, 45, 0.2);
+}
+
+.year-separator {
+  color: var(--sepia-light);
+  font-style: italic;
+}
+
+.year-estimate {
+  text-align: center;
+  font-family: var(--font-data);
+  font-size: 0.85rem;
+  color: var(--burnt-sienna);
+  margin-top: var(--space-xs);
+  font-weight: 500;
+}
+
+/* Record Limit Controls */
+.record-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+.record-limit-btn {
+  padding: 8px 16px;
+  border: 1px solid var(--golden-amber);
+  border-radius: 20px;
+  background: var(--parchment);
+  font-family: var(--font-data);
+  font-size: 0.85rem;
+  color: var(--sepia-ink);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.record-limit-btn:hover {
+  background: var(--parchment-dark);
+}
+
+.record-limit-btn.active {
+  background: var(--burnt-sienna);
+  border-color: var(--burnt-sienna);
+  color: var(--parchment);
+}
+
+.record-note {
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--sepia-light);
+  font-style: italic;
+  margin-top: var(--space-xs);
+}
+
+/* Modal Footer */
+.modal-footer {
+  padding: var(--space-md) var(--space-lg);
+  border-top: 1px solid var(--parchment-dark);
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+}
+
+.btn {
+  padding: 10px 24px;
+  border: none;
+  border-radius: 8px;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary {
+  background: var(--parchment-dark);
+  color: var(--sepia-ink);
+}
+
+.btn-secondary:hover {
+  background: #DDD5C5;
+}
+
+.btn-primary {
+  background: var(--burnt-sienna);
+  color: var(--parchment);
+}
+
+.btn-primary:hover {
+  background: #8B4513;
+}
+
+/* ==========================================================================
    Data Explorer Section
    ========================================================================== */
 .explorer-section {

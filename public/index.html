@@ -43,6 +43,82 @@
     </div>
   </div>
 
+  <!-- Large Dataset Warning Modal -->
+  <div id="dataset-warning-modal" class="modal-overlay hidden">
+    <div class="modal-content dataset-warning">
+      <div class="modal-header">
+        <div class="warning-icon">⚠️</div>
+        <h2>Large Dataset Detected</h2>
+      </div>
+      
+      <div class="modal-body">
+        <p class="warning-message" id="warning-message">
+          This species has <strong id="warning-total-records">0</strong> records, 
+          which may take a long time to load.
+        </p>
+        
+        <p class="warning-instruction">Choose how you'd like to proceed:</p>
+        
+        <div class="warning-options">
+          <!-- Option 1: Year Range -->
+          <div class="warning-option" id="option-year-range">
+            <input type="radio" name="dataset-option" id="radio-year-range" value="year-range" checked>
+            <label for="radio-year-range">
+              <span class="option-title">Select Year Range</span>
+              <span class="option-desc">Choose specific years to analyze</span>
+            </label>
+            <div class="option-controls" id="year-range-controls">
+              <div class="year-inputs">
+                <div class="year-input-group">
+                  <label for="year-from">From</label>
+                  <select id="year-from" class="year-select"></select>
+                </div>
+                <span class="year-separator">to</span>
+                <div class="year-input-group">
+                  <label for="year-to">To</label>
+                  <select id="year-to" class="year-select"></select>
+                </div>
+              </div>
+              <p class="year-estimate" id="year-estimate">~0 records</p>
+            </div>
+          </div>
+          
+          <!-- Option 2: Record Limit -->
+          <div class="warning-option" id="option-record-limit">
+            <input type="radio" name="dataset-option" id="radio-record-limit" value="record-limit">
+            <label for="radio-record-limit">
+              <span class="option-title">Limit by Record Count</span>
+              <span class="option-desc">Load most recent records up to a limit</span>
+            </label>
+            <div class="option-controls hidden" id="record-limit-controls">
+              <div class="record-buttons">
+                <button class="record-limit-btn" data-limit="10000">10,000</button>
+                <button class="record-limit-btn active" data-limit="25000">25,000</button>
+                <button class="record-limit-btn" data-limit="50000">50,000</button>
+                <button class="record-limit-btn" data-limit="100000">100,000</button>
+              </div>
+              <p class="record-note">Records loaded from most recent year backwards</p>
+            </div>
+          </div>
+          
+          <!-- Option 3: Load All -->
+          <div class="warning-option" id="option-load-all">
+            <input type="radio" name="dataset-option" id="radio-load-all" value="load-all">
+            <label for="radio-load-all">
+              <span class="option-title">Load All Records</span>
+              <span class="option-desc" id="load-all-warning">This may take several minutes</span>
+            </label>
+          </div>
+        </div>
+      </div>
+      
+      <div class="modal-footer">
+        <button id="warning-cancel" class="btn btn-secondary">Cancel</button>
+        <button id="warning-proceed" class="btn btn-primary">Load Data</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Flying Birds Layer -->
   <div id="flying-birds" class="flying-birds"></div>
   

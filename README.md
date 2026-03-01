@@ -1,16 +1,21 @@
-# The Song of the Woodlark
+# NBN Atlas Species Explorer
 
-An interactive data visualization exploring Woodlark (*Lullula arborea*) sightings across Britain, featuring 31,681 occurrence records from the NBN Atlas.
+An interactive data visualization for exploring any species from the NBN Atlas - the UK's largest collection of biodiversity data. Search for any species and visualize their occurrence records with beautiful maps, timelines, and statistical insights.
 
-![Woodlark Visualization](https://img.shields.io/badge/Records-31%2C681-green) ![Years](https://img.shields.io/badge/Data%20Span-1905--2024-blue) ![License](https://img.shields.io/badge/License-MIT-yellow)
+![NBN Atlas Explorer](https://img.shields.io/badge/Species-Any-green) ![Data Source](https://img.shields.io/badge/Source-NBN%20Atlas-blue) ![License](https://img.shields.io/badge/License-MIT-yellow)
 
 ## Features
 
-- **Interactive Map** — Explore woodlark sightings across Britain using Leaflet/OpenStreetMap with a year slider to travel through time
-- **Timeline Visualization** — See how sighting patterns have changed from 1905 to 2024
-- **Seasonal Wheel** — Discover when woodlarks are most commonly spotted throughout the year
-- **Key Insights** — Statistical analysis revealing population trends, breeding patterns, and geographic hotspots
+- **Universal Species Search** — Search for any species by common name, scientific name, or browse suggestions
+- **Interactive Map** — Explore sightings across the UK & Ireland using Leaflet/OpenStreetMap with a year slider to travel through time
+- **Timeline Visualization** — See how sighting patterns have changed over the years
+- **Seasonal Wheel** — Discover when species are most commonly spotted throughout the year
+- **Key Insights** — Automatically generated statistical analysis for any species
 - **Data Explorer** — Filter, sort, and export occurrence data to CSV for your own analysis
+- **Large Dataset Handling** — Smart modal for species with 50,000+ records, allowing you to:
+  - Select a specific year range
+  - Limit by record count (10k, 25k, 50k, 100k)
+  - Load all records with progress tracking
 
 ## Quick Start
 
@@ -18,83 +23,60 @@ An interactive data visualization exploring Woodlark (*Lullula arborea*) sightin
 # Install dependencies
 npm install
 
-# Fetch latest data from NBN Atlas API
-node fetch-all-data.js
-
-# Run statistical analysis
-node analyze-data.js
-
 # Start the server
 node index.js
 ```
 
 Open http://localhost:3000 in your browser.
 
+## How It Works
+
+1. **Search or Browse** — Use the search box to find any species, or click on featured examples
+2. **Data Loading** — The app fetches real-time data from the NBN Atlas API
+3. **Large Datasets** — For species with 50,000+ records, a modal lets you choose what to load
+4. **Visualize** — Explore the data through interactive map, timeline, seasonal wheel, and more
+5. **Export** — Use the Data Explorer to filter and export records as CSV
+
 ## Project Structure
 
 ```
 nbn-atlas-viewer/
 ├── public/
-│   ├── index.html          # Main SPA
+│   ├── index.html          # Main SPA with landing page + visualization
 │   ├── css/
-│   │   └── styles.css      # All styling (~1400 lines)
+│   │   └── styles.css      # All styling (~2200 lines)
 │   └── js/
-│       ├── app.js          # Main application logic
+│       ├── app.js          # Main SpeciesExplorer class
 │       └── animations.js   # Flying birds & visual effects
-├── data/
-│   ├── woodlark-occurrences.json  # 31,681 occurrence records
-│   ├── summary.json               # Faceted summary data
-│   └── insights.json              # Key statistical findings
-├── index.js                # Express server
-├── fetch-all-data.js       # NBN Atlas API data fetcher
-├── analyze-data.js         # Statistical analysis script
+├── index.js                # Express server with API proxies
 └── package.json
 ```
 
-## Key Findings
-
-| Metric | Value |
-|--------|-------|
-| Total Records | 31,681 |
-| Data Span | 1905–2024 (119 years) |
-| Peak Year | 2006 (2,353 sightings) |
-| Breeding Season | 62.7% of records (Mar–Jul) |
-| 2020s vs 2010s Growth | +27% |
-| Top Region | England (99.3%) |
-
-### Main Hotspots
-1. **Surrey Heaths** (lat 51.3°, lng -0.8°) — 5,929 records
-2. **Suffolk Brecks** (lat 52.3°, lng 0.8°) — 4,462 records  
-3. **New Forest** (lat 50.8°, lng -1.8°) — 3,155 records
-
 ## Data Source
 
-All occurrence data is sourced from the [NBN Atlas](https://nbnatlas.org/), the UK's largest collection of biodiversity data. The data was fetched using the NBN Atlas API with year-by-year queries to retrieve the complete dataset.
+All occurrence data is sourced in real-time from the [NBN Atlas API](https://api.nbnatlas.org/). The app uses:
+- Species search endpoint for finding species by name/GUID
+- Faceted occurrence queries for statistics
+- Year-by-year occurrence fetching to handle large datasets
 
-**Query:** Woodlark (*Lullula arborea*) occurrences, excluding "absent" records.
+**Note:** Data is filtered to UK & Ireland records only.
 
 ## Design
 
 The visualization uses a naturalist field journal aesthetic with:
 - **Typography:** Playfair Display (headings), Crimson Pro (body), JetBrains Mono (data)
 - **Palette:** Parchment, burnt sienna, golden amber, forest deep
-- **Animations:** Flying SVG woodlarks, floating particles, scroll-triggered reveals
+- **Animations:** Flying SVG birds, floating particles, scroll-triggered reveals
 
-## API
+## API Endpoints
 
-The Express server exposes:
-- `GET /` — Main visualization
-- `GET /data/woodlark-occurrences.json` — Raw occurrence data
-- `GET /data/summary.json` — Faceted summary
-- `GET /data/insights.json` — Statistical insights
+The Express server proxies requests to NBN Atlas:
 
-## Scripts
-
-| Script | Description |
-|--------|-------------|
-| `node index.js` | Start Express server on port 3000 |
-| `node fetch-all-data.js` | Fetch all data from NBN Atlas API (year-by-year to bypass 5000 limit) |
-| `node analyze-data.js` | Run statistical analysis and generate insights.json |
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/species/search` | Search species by name/GUID |
+| `GET /api/species/:guid/facets` | Get occurrence statistics for a species |
+| `GET /api/species/:guid/occurrences/:year` | Get occurrences for a specific year |
 
 ## Requirements
 
