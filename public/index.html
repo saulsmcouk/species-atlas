@@ -202,7 +202,7 @@
             <span class="featured-icon">🦡</span>
             <span class="featured-name">Badger</span>
           </button>
-          <button class="featured-btn" data-guid="NHMSYS0021125602" data-prefetch="true">
+          <button class="featured-btn" data-guid="NHMSYS0021125602">
             <span class="featured-icon">🎵</span>
             <span class="featured-name">Woodlark</span>
           </button>
@@ -243,7 +243,16 @@
     <!-- Footer for Landing -->
     <footer class="landing-footer">
       <p>Powered by data from the <a href="https://nbnatlas.org" target="_blank">NBN Atlas</a></p>
-      <p class="footer-license">Data licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank">CC BY 4.0</a>. Please cite NBN Atlas when using this data. <a href="https://docs.nbnatlas.org/nbn-atlas-terms-of-use/" target="_blank">Terms of Use</a></p>
+      <p class="footer-license">
+        Data licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank">CC BY 4.0</a>. 
+        Please cite NBN Atlas when using this data. 
+        <a href="https://docs.nbnatlas.org/nbn-atlas-terms-of-use/" target="_blank">Terms of Use</a>
+      </p>
+      <p class="footer-license">
+        Maps © <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> · 
+        Location search by <a href="https://nominatim.org/" target="_blank">Nominatim</a> · 
+        <a href="https://leafletjs.com" target="_blank">Leaflet</a>
+      </p>
     </footer>
   </div>
 
@@ -339,6 +348,48 @@
         <div class="control-group">
           <label class="control-label">Regional Breakdown</label>
           <div id="region-stats" class="region-stats"></div>
+        </div>
+        
+        <div class="control-group location-filter-group">
+          <label class="control-label">Location Filter</label>
+          
+          <!-- Filter Type Tabs -->
+          <div class="filter-tabs">
+            <button class="filter-tab active" data-filter="none">None</button>
+            <button class="filter-tab" data-filter="grid">Grid Ref</button>
+            <button class="filter-tab" data-filter="location">Location</button>
+          </div>
+          
+          <!-- Grid Reference Filter -->
+          <div id="grid-filter-panel" class="filter-panel hidden">
+            <div class="filter-input-group">
+              <input type="text" id="grid-search" class="filter-input" placeholder="Type to search grid refs..." autocomplete="off">
+              <div id="grid-dropdown" class="filter-dropdown hidden"></div>
+            </div>
+            <div id="active-grid-filters" class="active-filters"></div>
+          </div>
+          
+          <!-- Location Filter -->
+          <div id="location-filter-panel" class="filter-panel hidden">
+            <div class="filter-input-group">
+              <input type="text" id="location-search" class="filter-input" placeholder="Search for a place..." autocomplete="off">
+              <div id="location-dropdown" class="filter-dropdown hidden"></div>
+            </div>
+            <div id="selected-location" class="selected-location hidden">
+              <span class="location-name"></span>
+              <button class="location-clear" title="Clear location">&times;</button>
+            </div>
+            <div id="radius-control" class="radius-control hidden">
+              <label>Radius: <span id="radius-value">10</span> km</label>
+              <input type="range" id="radius-slider" class="radius-slider" min="1" max="100" value="10">
+            </div>
+          </div>
+          
+          <!-- Filter Status -->
+          <div id="filter-status" class="filter-status hidden">
+            <span id="filter-count">Showing all records</span>
+            <button id="clear-location-filter" class="clear-filter-btn">Clear</button>
+          </div>
         </div>
       </div>
     </div>
@@ -559,6 +610,11 @@
       Please cite the NBN Atlas when using this data. 
       <a href="https://docs.nbnatlas.org/nbn-atlas-terms-of-use/" target="_blank">Terms of Use</a> · 
       <a href="https://registry.nbnatlas.org/" target="_blank">Data Partners</a>
+    </p>
+    <p class="footer-license">
+      Maps © <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> · 
+      Location search by <a href="https://nominatim.org/" target="_blank">Nominatim</a> · 
+      <a href="https://leafletjs.com" target="_blank">Leaflet</a>
     </p>
   </footer>
 

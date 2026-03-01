@@ -14,9 +14,6 @@ const UK_IRELAND_FILTER = 'country:%22United%20Kingdom%20of%20Great%20Britain%20
 // Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Serve data files (for pre-fetched woodlark data)
-app.use('/data', express.static(path.join(__dirname, 'data')));
-
 // ============================================================
 // API PROXY ENDPOINTS
 // ============================================================
@@ -154,7 +151,8 @@ app.get('/api/species/:guid/occurrences', async (req, res) => {
       stateProvince: occ.stateProvince,
       basisOfRecord: occ.basisOfRecord,
       scientificName: occ.scientificName,
-      vernacularName: occ.vernacularName
+      vernacularName: occ.vernacularName,
+      gridReference: occ.gridReference
     }));
     
     res.json({
@@ -201,7 +199,8 @@ async function fetchRecordsRecursive(guid, timeFilters, maxRecords, onProgress =
       stateProvince: occ.stateProvince,
       basisOfRecord: occ.basisOfRecord,
       scientificName: occ.scientificName,
-      vernacularName: occ.vernacularName
+      vernacularName: occ.vernacularName,
+      gridReference: occ.gridReference
     }));
     
     allOccurrences = allOccurrences.concat(occurrences);

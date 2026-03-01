@@ -118,5 +118,7 @@ This visualization tool is MIT licensed. NBN Atlas data remains under CC BY 4.0.
 ## Acknowledgments
 
 - Data provided by the [NBN Atlas](https://nbnatlas.org/) under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
-- Map tiles by [OpenStreetMap](https://www.openstreetmap.org/copyright)
+- Map tiles © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors (ODbL)
+- Location search powered by [Nominatim](https://nominatim.org/) (ODbL)
+- Interactive maps by [Leaflet](https://leafletjs.com) (BSD-2-Clause)
 - Built with 🤍 for nature

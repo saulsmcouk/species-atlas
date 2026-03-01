@@ -4,6 +4,23 @@
 
 This is a **single-page application (SPA)** for visualizing biodiversity data from the NBN Atlas API. Users search for any species and see interactive maps, timelines, seasonal wheels, and data tables.
 
+## ⚠️ IMPORTANT: Attributions & Licensing
+
+**All third-party attributions MUST be visible in BOTH:**
+1. **The tool UI** — Footer section on both landing and visualization views
+2. **The README** — Acknowledgments section
+
+### Required Attributions
+
+| Resource | License | Attribution Text |
+|----------|---------|------------------|
+| NBN Atlas Data | CC BY 4.0 | "Data provided by the NBN Atlas under CC BY 4.0" |
+| OpenStreetMap | ODbL | "Maps © OpenStreetMap contributors" |
+| Nominatim | ODbL | "Location search powered by Nominatim" |
+| Leaflet | BSD-2-Clause | "Interactive maps by Leaflet" |
+
+When adding new third-party services or data sources, **immediately add attribution** to both locations.
+
 ## Architecture
 
 ```
@@ -11,8 +28,10 @@ public/
 ├── index.html          # Single HTML file with all markup
 ├── css/styles.css      # All CSS (~2400 lines)
 └── js/
-    ├── app.js          # Main SpeciesExplorer class (~1400 lines)
+    ├── app.js          # Main SpeciesExplorer class
     └── animations.js   # Flying birds, particles, scroll effects
+docs/
+└── occurrence-schema.md  # Data schema reference
 index.js                # Express server with API proxies
 ```
 
@@ -97,7 +116,7 @@ All in `public/css/styles.css`. Major sections are commented with `/* ==========
 Run `node index.js` and open http://localhost:3000
 
 Test with:
-- Small dataset: Woodlark (~31k records)
+- Small dataset: Any bird with <50k records (e.g., search "Woodlark")
 - Large dataset: Robin (~5.8M records) - triggers modal
 - No data species: Search for something obscure
 
@@ -110,4 +129,4 @@ git add -A; git commit -m "message"; git push
 
 ## Data Licensing
 
-NBN Atlas data is CC BY 4.0. Attribution is included in both footers.
+NBN Atlas data is CC BY 4.0. Attribution is included in both footers (landing and visualization views).

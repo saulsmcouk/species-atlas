@@ -13,6 +13,16 @@ class SpeciesExplorer {
     this.currentYear = 'all';
     this.map = null;
     this.markersLayer = null;
+    this.radiusCircle = null;
+    
+    // Location filter state
+    this.locationFilter = {
+      type: 'none', // 'none', 'grid', 'location'
+      gridRefs: [],
+      location: null, // { lat, lng, name }
+      radius: 10 // km
+    };
+    this.allGridRefs = []; // Populated from data
     
     this.init();
   }
@@ -21,6 +31,368 @@ class SpeciesExplorer {
     this.bindLandingEvents();
     this.initAnimations();
     this.handleRouting();
+  }
+  
+  // =========================================
+  // Location Filter Logic
+  // =========================================
+  
+  // Get occurrences filtered by both year and location
+  getFilteredOccurrences() {
+    let occurrences;
+    if (this.currentYear === 'all') {
+      occurrences = this.data?.occurrences || [];
+    } else {
+      occurrences = this.yearData[this.currentYear] || [];
+    }
+    
+    // Apply location filter
+    if (this.locationFilter.type === 'grid' && this.locationFilter.gridRefs.length > 0) {
+      occurrences = occurrences.filter(occ => {
+        if (!occ.gridReference) return false;
+        // Match prefix for any selected grid ref
+        return this.locationFilter.gridRefs.some(ref => 
+          occ.gridReference.toUpperCase().startsWith(ref.toUpperCase())
+        );
+      });
+    } else if (this.locationFilter.type === 'location' && this.locationFilter.location) {
+      const { lat, lng } = this.locationFilter.location;
+      const radiusKm = this.locationFilter.radius;
+      occurrences = occurrences.filter(occ => {
+        if (!occ.decimalLatitude || !occ.decimalLongitude) return false;
+        const distance = this.haversineDistance(lat, lng, occ.decimalLatitude, occ.decimalLongitude);
+        return distance <= radiusKm;
+      });
+    }
+    
+    return occurrences;
+  }
+  
+  // Haversine formula for distance between two coordinates (in km)
+  haversineDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Earth's radius in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+  
+  // Extract unique grid reference prefixes from data
+  extractGridRefs() {
+    if (!this.data?.occurrences) return;
+    
+    const gridRefSet = new Set();
+    this.data.occurrences.forEach(occ => {
+      if (occ.gridReference) {
+        // Get 2-letter prefix + first 1-2 digits for grouping (e.g., "TQ17", "SK0")
+        const match = occ.gridReference.match(/^([A-Z]{1,2}\d{1,2})/i);
+        if (match) {
+          gridRefSet.add(match[1].toUpperCase());
+        }
+      }
+    });
+    
+    this.allGridRefs = Array.from(gridRefSet).sort();
+  }
+  
+  // Search location using Nominatim (OpenStreetMap)
+  async searchLocation(query) {
+    if (query.length < 3) return [];
+    
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?` +
+        `q=${encodeURIComponent(query)}&format=json&countrycodes=gb,ie&limit=8`,
+        {
+          headers: {
+            'Accept': 'application/json',
+            'User-Agent': 'NBN-Atlas-Species-Explorer/1.0'
+          }
+        }
+      );
+      
+      if (!response.ok) throw new Error('Nominatim search failed');
+      
+      const results = await response.json();
+      return results.map(r => ({
+        name: r.display_name,
+        lat: parseFloat(r.lat),
+        lng: parseFloat(r.lon),
+        type: r.type
+      }));
+    } catch (error) {
+      console.error('Location search error:', error);
+      return [];
+    }
+  }
+  
+  // Update filter status UI
+  updateFilterStatus() {
+    const statusEl = document.getElementById('filter-status');
+    const countEl = document.getElementById('filter-count');
+    
+    if (!statusEl || !countEl) return;
+    
+    if (this.locationFilter.type === 'none') {
+      statusEl.classList.add('hidden');
+      return;
+    }
+    
+    const filtered = this.getFilteredOccurrences();
+    const total = this.currentYear === 'all' 
+      ? this.data?.occurrences?.length || 0
+      : this.yearData[this.currentYear]?.length || 0;
+    
+    countEl.textContent = `${filtered.length.toLocaleString()} of ${total.toLocaleString()} records`;
+    statusEl.classList.remove('hidden');
+  }
+  
+  // Update radius circle on map
+  updateRadiusCircle() {
+    if (this.radiusCircle) {
+      this.map?.removeLayer(this.radiusCircle);
+      this.radiusCircle = null;
+    }
+    
+    if (this.locationFilter.type === 'location' && this.locationFilter.location && this.map) {
+      const { lat, lng } = this.locationFilter.location;
+      this.radiusCircle = L.circle([lat, lng], {
+        radius: this.locationFilter.radius * 1000, // km to meters
+        color: '#A0522D',
+        fillColor: '#DAA520',
+        fillOpacity: 0.15,
+        weight: 2
+      }).addTo(this.map);
+      
+      // Pan map to show the circle
+      this.map.fitBounds(this.radiusCircle.getBounds(), { padding: [20, 20] });
+    }
+  }
+  
+  // Refresh all visualizations with current filter
+  refreshAllVisualizations() {
+    this.updateMapMarkers();
+    this.updateRegionStats();
+    this.updateFilterStatus();
+    this.initTimeline();
+    this.initSeasonalWheel();
+    this.populateInsights();
+    
+    // Update explorer filtered data
+    if (this.filteredData) {
+      this.applyFilters();
+    }
+  }
+  
+  bindLocationFilterEvents() {
+    // Filter type tabs
+    const tabs = document.querySelectorAll('.filter-tab');
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        tabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        
+        const filterType = tab.dataset.filter;
+        this.locationFilter.type = filterType;
+        
+        // Show/hide panels
+        document.getElementById('grid-filter-panel')?.classList.toggle('hidden', filterType !== 'grid');
+        document.getElementById('location-filter-panel')?.classList.toggle('hidden', filterType !== 'location');
+        
+        // Clear filters when switching to none
+        if (filterType === 'none') {
+          this.locationFilter.gridRefs = [];
+          this.locationFilter.location = null;
+          this.updateRadiusCircle();
+          this.refreshAllVisualizations();
+        }
+      });
+    });
+    
+    // Grid reference search
+    const gridSearch = document.getElementById('grid-search');
+    const gridDropdown = document.getElementById('grid-dropdown');
+    
+    if (gridSearch && gridDropdown) {
+      gridSearch.addEventListener('input', () => {
+        const query = gridSearch.value.toUpperCase().trim();
+        
+        if (query.length === 0) {
+          gridDropdown.classList.add('hidden');
+          return;
+        }
+        
+        const matches = this.allGridRefs
+          .filter(ref => ref.startsWith(query))
+          .slice(0, 20);
+        
+        if (matches.length === 0) {
+          gridDropdown.innerHTML = '<div class="filter-dropdown-item" style="color: var(--sepia-light);">No matching grid references</div>';
+        } else {
+          gridDropdown.innerHTML = matches.map(ref => 
+            `<div class="filter-dropdown-item" data-grid="${ref}">${ref}</div>`
+          ).join('');
+        }
+        
+        gridDropdown.classList.remove('hidden');
+      });
+      
+      gridDropdown.addEventListener('click', (e) => {
+        const item = e.target.closest('.filter-dropdown-item');
+        if (item && item.dataset.grid) {
+          const ref = item.dataset.grid;
+          if (!this.locationFilter.gridRefs.includes(ref)) {
+            this.locationFilter.gridRefs.push(ref);
+            this.renderActiveGridFilters();
+            this.refreshAllVisualizations();
+          }
+          gridSearch.value = '';
+          gridDropdown.classList.add('hidden');
+        }
+      });
+      
+      // Close dropdown when clicking outside
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('#grid-search') && !e.target.closest('#grid-dropdown')) {
+          gridDropdown.classList.add('hidden');
+        }
+      });
+    }
+    
+    // Location search
+    const locationSearch = document.getElementById('location-search');
+    const locationDropdown = document.getElementById('location-dropdown');
+    let locationTimeout = null;
+    
+    if (locationSearch && locationDropdown) {
+      locationSearch.addEventListener('input', () => {
+        clearTimeout(locationTimeout);
+        const query = locationSearch.value.trim();
+        
+        if (query.length < 3) {
+          locationDropdown.classList.add('hidden');
+          return;
+        }
+        
+        locationTimeout = setTimeout(async () => {
+          const results = await this.searchLocation(query);
+          
+          if (results.length === 0) {
+            locationDropdown.innerHTML = '<div class="filter-dropdown-item" style="color: var(--sepia-light);">No locations found</div>';
+          } else {
+            locationDropdown.innerHTML = results.map((r, i) => 
+              `<div class="filter-dropdown-item" data-idx="${i}">
+                <div>${r.name.split(',').slice(0, 2).join(', ')}</div>
+                <div class="item-secondary">${r.name.split(',').slice(2, 4).join(', ')}</div>
+              </div>`
+            ).join('');
+            
+            // Store results for selection
+            locationDropdown._results = results;
+          }
+          
+          locationDropdown.classList.remove('hidden');
+        }, 300);
+      });
+      
+      locationDropdown.addEventListener('click', (e) => {
+        const item = e.target.closest('.filter-dropdown-item');
+        if (item && item.dataset.idx !== undefined) {
+          const result = locationDropdown._results?.[parseInt(item.dataset.idx)];
+          if (result) {
+            this.locationFilter.location = result;
+            this.renderSelectedLocation();
+            document.getElementById('radius-control')?.classList.remove('hidden');
+            this.updateRadiusCircle();
+            this.refreshAllVisualizations();
+          }
+          locationSearch.value = '';
+          locationDropdown.classList.add('hidden');
+        }
+      });
+      
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('#location-search') && !e.target.closest('#location-dropdown')) {
+          locationDropdown.classList.add('hidden');
+        }
+      });
+    }
+    
+    // Radius slider
+    const radiusSlider = document.getElementById('radius-slider');
+    const radiusValue = document.getElementById('radius-value');
+    
+    if (radiusSlider && radiusValue) {
+      radiusSlider.addEventListener('input', () => {
+        this.locationFilter.radius = parseInt(radiusSlider.value);
+        radiusValue.textContent = radiusSlider.value;
+        this.updateRadiusCircle();
+        this.refreshAllVisualizations();
+      });
+    }
+    
+    // Location clear button
+    document.getElementById('selected-location')?.querySelector('.location-clear')?.addEventListener('click', () => {
+      this.locationFilter.location = null;
+      document.getElementById('selected-location')?.classList.add('hidden');
+      document.getElementById('radius-control')?.classList.add('hidden');
+      this.updateRadiusCircle();
+      this.refreshAllVisualizations();
+    });
+    
+    // Clear all filter button
+    document.getElementById('clear-location-filter')?.addEventListener('click', () => {
+      // Reset to "none" tab
+      document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+      document.querySelector('.filter-tab[data-filter="none"]')?.classList.add('active');
+      
+      this.locationFilter.type = 'none';
+      this.locationFilter.gridRefs = [];
+      this.locationFilter.location = null;
+      
+      document.getElementById('grid-filter-panel')?.classList.add('hidden');
+      document.getElementById('location-filter-panel')?.classList.add('hidden');
+      document.getElementById('selected-location')?.classList.add('hidden');
+      document.getElementById('radius-control')?.classList.add('hidden');
+      document.getElementById('active-grid-filters').innerHTML = '';
+      
+      this.updateRadiusCircle();
+      this.refreshAllVisualizations();
+    });
+  }
+  
+  renderActiveGridFilters() {
+    const container = document.getElementById('active-grid-filters');
+    if (!container) return;
+    
+    container.innerHTML = this.locationFilter.gridRefs.map(ref => 
+      `<span class="active-filter-tag">
+        ${ref}
+        <button data-ref="${ref}" title="Remove">&times;</button>
+      </span>`
+    ).join('');
+    
+    container.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const ref = btn.dataset.ref;
+        this.locationFilter.gridRefs = this.locationFilter.gridRefs.filter(r => r !== ref);
+        this.renderActiveGridFilters();
+        this.refreshAllVisualizations();
+      });
+    });
+  }
+  
+  renderSelectedLocation() {
+    const container = document.getElementById('selected-location');
+    const nameEl = container?.querySelector('.location-name');
+    
+    if (container && nameEl && this.locationFilter.location) {
+      nameEl.textContent = this.locationFilter.location.name.split(',').slice(0, 2).join(', ');
+      container.classList.remove('hidden');
+    }
   }
   
   // =========================================
@@ -123,14 +495,7 @@ class SpeciesExplorer {
     document.querySelectorAll('.featured-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const guid = btn.dataset.guid;
-        const usePrefetch = btn.dataset.prefetch === 'true';
-        
-        if (usePrefetch && guid === 'NHMSYS0021125602') {
-          // Use pre-fetched woodlark data
-          this.loadWoodlarkPrefetched();
-        } else {
-          window.location.hash = `/species/${guid}`;
-        }
+        window.location.hash = `/species/${guid}`;
       });
     });
     
@@ -532,67 +897,6 @@ class SpeciesExplorer {
     }
   }
   
-  async loadWoodlarkPrefetched() {
-    this.showLoading('Loading Woodlark data...');
-    
-    try {
-      const [occurrencesRes, summaryRes] = await Promise.all([
-        fetch('/data/woodlark-occurrences.json'),
-        fetch('/data/summary.json')
-      ]);
-      
-      if (!occurrencesRes.ok || !summaryRes.ok) {
-        throw new Error('Failed to load pre-fetched data');
-      }
-      
-      const occData = await occurrencesRes.json();
-      const summary = await summaryRes.json();
-      
-      this.species = {
-        guid: 'NHMSYS0021125602',
-        scientificName: 'Lullula arborea',
-        commonName: 'Woodlark',
-        speciesGroup: 'Birds',
-        totalRecords: occData.totalRecords
-      };
-      
-      this.data = {
-        totalRecords: occData.totalRecords,
-        occurrences: occData.occurrences
-      };
-      
-      // Process data
-      this.processData();
-      this.processFacets(summary.facets);
-      
-      // Update hero
-      this.updateHero();
-      this.showVisualization();
-      
-      // Initialize visualizations
-      this.hideLoading();
-      this.initMap();
-      this.initTimeline();
-      this.initSeasonalWheel();
-      this.populateInsights();
-      this.initExplorer();
-      this.initScrollAnimations();
-      
-      // Update URL without triggering reload
-      history.pushState(null, '', '#/species/NHMSYS0021125602');
-      
-      // Animate counter
-      this.animateHeroCounter();
-      
-      document.title = 'Woodlark | NBN Atlas Explorer';
-      
-    } catch (error) {
-      console.error('Failed to load Woodlark data:', error);
-      // Fall back to API
-      window.location.hash = '/species/NHMSYS0021125602';
-    }
-  }
-  
   updateHero() {
     const scientificEl = document.getElementById('species-scientific');
     const commonEl = document.getElementById('species-common');
@@ -628,6 +932,15 @@ class SpeciesExplorer {
     });
     
     this.years = Object.keys(this.yearData).map(Number).sort((a, b) => a - b);
+    
+    // Extract grid references for filter
+    this.extractGridRefs();
+    
+    // Bind location filter events once
+    if (!this.locationFilterBound) {
+      this.bindLocationFilterEvents();
+      this.locationFilterBound = true;
+    }
   }
   
   // Fetch year data with SSE streaming for recursive progress (month -> day if needed)
@@ -879,12 +1192,8 @@ class SpeciesExplorer {
     
     this.markersLayer.clearLayers();
     
-    let occurrences;
-    if (this.currentYear === 'all') {
-      occurrences = this.data.occurrences;
-    } else {
-      occurrences = this.yearData[this.currentYear] || [];
-    }
+    // Use filtered occurrences
+    const occurrences = this.getFilteredOccurrences();
     
     const icon = L.divIcon({
       className: 'woodlark-marker',
@@ -910,12 +1219,8 @@ class SpeciesExplorer {
     const statsContainer = document.getElementById('region-stats');
     if (!statsContainer) return;
     
-    let occurrences;
-    if (this.currentYear === 'all') {
-      occurrences = this.data.occurrences;
-    } else {
-      occurrences = this.yearData[this.currentYear] || [];
-    }
+    // Use filtered occurrences
+    const occurrences = this.getFilteredOccurrences();
     
     const regionCounts = {};
     occurrences.forEach(occ => {
@@ -949,15 +1254,24 @@ class SpeciesExplorer {
     
     if (!trackContainer || this.years.length === 0) return;
     
+    // Compute year counts from filtered data when location filter is active
+    const filteredOccurrences = this.getFilteredOccurrences();
+    const yearCountMap = {};
+    filteredOccurrences.forEach(occ => {
+      if (occ.year) {
+        yearCountMap[occ.year] = (yearCountMap[occ.year] || 0) + 1;
+      }
+    });
+    
     const yearCounts = this.years.map(year => ({
       year,
-      count: this.yearData[year]?.length || 0
+      count: yearCountMap[year] || 0
     }));
     
-    const maxCount = Math.max(...yearCounts.map(y => y.count));
+    const maxCount = Math.max(...yearCounts.map(y => y.count), 1);
     
     trackContainer.innerHTML = this.years.map(year => {
-      const count = this.yearData[year]?.length || 0;
+      const count = yearCountMap[year] || 0;
       const height = (count / maxCount) * 100;
       return `
         <div class="timeline-bar" 
@@ -1006,7 +1320,17 @@ class SpeciesExplorer {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     
-    const monthCounts = months.map((_, i) => this.monthData[i + 1]?.length || 0);
+    // Compute month counts from filtered data
+    const filteredOccurrences = this.getFilteredOccurrences();
+    const monthCountMap = {};
+    filteredOccurrences.forEach(occ => {
+      if (occ.month) {
+        const monthNum = parseInt(occ.month);
+        monthCountMap[monthNum] = (monthCountMap[monthNum] || 0) + 1;
+      }
+    });
+    
+    const monthCounts = months.map((_, i) => monthCountMap[i + 1] || 0);
     const maxCount = Math.max(...monthCounts, 1);
     
     const size = 400;
@@ -1091,47 +1415,73 @@ class SpeciesExplorer {
     
     if (!grid) return;
     
-    // Calculate insights from data
-    const totalRecords = this.data.totalRecords;
-    const years = this.years;
+    // Use filtered occurrences
+    const filteredOccurrences = this.getFilteredOccurrences();
+    const totalRecords = filteredOccurrences.length;
+    
+    // Compute year/month/region data from filtered occurrences
+    const filteredYearData = {};
+    const filteredMonthData = {};
+    const filteredRegionData = {};
+    
+    filteredOccurrences.forEach(occ => {
+      const year = occ.year;
+      if (year) {
+        if (!filteredYearData[year]) filteredYearData[year] = [];
+        filteredYearData[year].push(occ);
+      }
+      
+      const month = occ.month;
+      if (month) {
+        const monthNum = parseInt(month);
+        if (!filteredMonthData[monthNum]) filteredMonthData[monthNum] = [];
+        filteredMonthData[monthNum].push(occ);
+      }
+      
+      const region = occ.stateProvince || 'Unknown';
+      if (!filteredRegionData[region]) filteredRegionData[region] = [];
+      filteredRegionData[region].push(occ);
+    });
+    
+    const years = Object.keys(filteredYearData).map(Number).sort((a, b) => a - b);
     const firstYear = years[0] || 'N/A';
     const lastYear = years[years.length - 1] || 'N/A';
     const yearSpan = years.length > 1 ? lastYear - firstYear + 1 : 1;
     
     // Peak year
     const peakYear = years.reduce((max, year) => {
-      const count = this.yearData[year]?.length || 0;
-      return count > (this.yearData[max]?.length || 0) ? year : max;
+      const count = filteredYearData[year]?.length || 0;
+      return count > (filteredYearData[max]?.length || 0) ? year : max;
     }, years[0]);
-    const peakYearCount = this.yearData[peakYear]?.length || 0;
+    const peakYearCount = filteredYearData[peakYear]?.length || 0;
     
     // Top region
-    const regions = Object.entries(this.regionData)
+    const regions = Object.entries(filteredRegionData)
       .filter(([r]) => r !== 'Unknown')
       .sort((a, b) => b[1].length - a[1].length);
     const topRegion = regions[0]?.[0] || 'Unknown';
-    const topRegionPct = ((regions[0]?.[1].length || 0) / totalRecords * 100).toFixed(1);
+    const topRegionPct = totalRecords > 0 ? ((regions[0]?.[1].length || 0) / totalRecords * 100).toFixed(1) : '0';
     
     // Breeding season (Mar-Jul for birds, or peak months)
     const monthCounts = {};
     for (let i = 1; i <= 12; i++) {
-      monthCounts[i] = this.monthData[i]?.length || 0;
+      monthCounts[i] = filteredMonthData[i]?.length || 0;
     }
     
     const breedingMonths = [3, 4, 5, 6, 7];
     const breedingCount = breedingMonths.reduce((sum, m) => sum + monthCounts[m], 0);
     const totalWithMonth = Object.values(monthCounts).reduce((a, b) => a + b, 0);
-    const breedingPct = ((breedingCount / totalWithMonth) * 100).toFixed(0);
+    const breedingPct = totalWithMonth > 0 ? ((breedingCount / totalWithMonth) * 100).toFixed(0) : '0';
     
     // Decade comparison
     const decade2010s = years.filter(y => y >= 2010 && y < 2020);
     const decade2020s = years.filter(y => y >= 2020);
     
     const avg2010s = decade2010s.length > 0 
-      ? decade2010s.reduce((sum, y) => sum + (this.yearData[y]?.length || 0), 0) / decade2010s.length 
+      ? decade2010s.reduce((sum, y) => sum + (filteredYearData[y]?.length || 0), 0) / decade2010s.length 
       : 0;
     const avg2020s = decade2020s.length > 0 
-      ? decade2020s.reduce((sum, y) => sum + (this.yearData[y]?.length || 0), 0) / decade2020s.length 
+      ? decade2020s.reduce((sum, y) => sum + (filteredYearData[y]?.length || 0), 0) / decade2020s.length 
       : 0;
     
     const trendPct = avg2010s > 0 ? (((avg2020s - avg2010s) / avg2010s) * 100).toFixed(0) : 'N/A';
