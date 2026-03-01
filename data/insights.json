@@ -1,12 +1,12 @@
 {
   "totalRecords": 31681,
   "peakYear": "2006",
-  "peakYearCount": 340,
+  "peakYearCount": 2353,
   "topRegion": "England",
-  "topRegionPct": "15.7",
-  "breedingSeasonPct": "63.1",
+  "topRegionPct": "99.3",
+  "breedingSeasonPct": "62.7",
   "trend2020s": "increasing",
-  "yearSpan": "1948-2024",
+  "yearSpan": "1905-2024",
   "hotspotLat": 51.25,
   "hotspotLng": -0.75
 }

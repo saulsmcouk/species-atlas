@@ -1,16 +1,15 @@
 // Script to fetch all Woodlark occurrence data from NBN Atlas API
+// Uses year-by-year fetching to bypass the 5000 record limit per query
 const fs = require('fs');
 const path = require('path');
 
 const BASE_URL = 'https://records-ws.nbnatlas.org/occurrences/search';
-const QUERY = 'q=qid%3A1770719700170&fq=-occurrence_status%3A%22absent%22';
+const BASE_QUERY = 'q=qid%3A1770719700170&fq=-occurrence_status%3A%22absent%22';
 const PAGE_SIZE = 1000;
 const DATA_DIR = path.join(__dirname, 'data');
 
-async function fetchPage(startIndex) {
-  const url = `${BASE_URL}?${QUERY}&pageSize=${PAGE_SIZE}&startIndex=${startIndex}`;
-  console.log(`Fetching page at startIndex=${startIndex}...`);
-  
+async function fetchPage(query, startIndex) {
+  const url = `${BASE_URL}?${query}&pageSize=${PAGE_SIZE}&startIndex=${startIndex}`;
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`HTTP error! status: ${response.status}`);
@@ -18,38 +17,56 @@ async function fetchPage(startIndex) {
   return response.json();
 }
 
-async function fetchAllData() {
-  console.log('Starting data fetch from NBN Atlas API...\n');
+async function fetchYearData(year) {
+  const query = `${BASE_QUERY}&fq=year%3A${year}`;
+  let allOccurrences = [];
+  let startIndex = 0;
   
-  // First request to get total count
-  const firstPage = await fetchPage(0);
-  const totalRecords = firstPage.totalRecords;
-  const totalPages = Math.ceil(totalRecords / PAGE_SIZE);
-  
-  console.log(`Total records: ${totalRecords}`);
-  console.log(`Total pages to fetch: ${totalPages}\n`);
-  
-  // Collect all occurrences
-  let allOccurrences = [...firstPage.occurrences];
-  console.log(`Page 1/${totalPages}: Fetched ${firstPage.occurrences.length} records`);
-  
-  // Fetch remaining pages
-  for (let page = 1; page < totalPages; page++) {
-    const startIndex = page * PAGE_SIZE;
-    const data = await fetchPage(startIndex);
-    allOccurrences = allOccurrences.concat(data.occurrences);
-    console.log(`Page ${page + 1}/${totalPages}: Fetched ${data.occurrences.length} records (Total: ${allOccurrences.length})`);
+  while (true) {
+    const data = await fetchPage(query, startIndex);
+    if (data.occurrences.length === 0) break;
     
-    // Small delay to be respectful to the API
-    await new Promise(resolve => setTimeout(resolve, 200));
+    allOccurrences = allOccurrences.concat(data.occurrences);
+    
+    if (allOccurrences.length >= data.totalRecords || data.occurrences.length < PAGE_SIZE) {
+      break;
+    }
+    
+    startIndex += PAGE_SIZE;
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  
+  return allOccurrences;
+}
+
+async function fetchAllData() {
+  console.log('Starting data fetch from NBN Atlas API (year-by-year)...\n');
+  
+  // First, get the available years from facets
+  const facetsUrl = `${BASE_URL}?${BASE_QUERY}&pageSize=0&facets=year&facet=true&flimit=100`;
+  const facetsResponse = await fetch(facetsUrl);
+  const facetsData = await facetsResponse.json();
+  
+  const yearFacet = facetsData.facetResults?.find(f => f.fieldName === 'year');
+  const years = yearFacet?.fieldResult?.map(r => r.label).sort() || [];
+  
+  console.log(`Found ${years.length} years to fetch: ${years[0]} to ${years[years.length - 1]}\n`);
+  
+  // Fetch data for each year
+  let allOccurrences = [];
+  for (const year of years) {
+    const yearOccurrences = await fetchYearData(year);
+    allOccurrences = allOccurrences.concat(yearOccurrences);
+    console.log(`Year ${year}: ${yearOccurrences.length} records (Total: ${allOccurrences.length})`);
+    await new Promise(resolve => setTimeout(resolve, 150));
   }
   
   // Create combined dataset
   const dataset = {
     fetchedAt: new Date().toISOString(),
     source: 'NBN Atlas API',
-    query: QUERY,
-    totalRecords: totalRecords,
+    query: BASE_QUERY,
+    totalRecords: allOccurrences.length,
     recordCount: allOccurrences.length,
     occurrences: allOccurrences
   };
@@ -60,14 +77,14 @@ async function fetchAllData() {
   console.log(`\n✓ Saved ${allOccurrences.length} records to ${outputPath}`);
   
   // Also save a summary file with facets
-  const facetsUrl = `${BASE_URL}?${QUERY}&pageSize=0&facets=species,year,data_resource_uid,month,state_province&facet=true&flimit=100`;
-  const facetsResponse = await fetch(facetsUrl);
-  const facetsData = await facetsResponse.json();
+  const summaryFacetsUrl = `${BASE_URL}?${BASE_QUERY}&pageSize=0&facets=species,year,data_resource_uid,month,state_province&facet=true&flimit=100`;
+  const summaryResponse = await fetch(summaryFacetsUrl);
+  const summaryData = await summaryResponse.json();
   
   const summary = {
     fetchedAt: new Date().toISOString(),
-    totalRecords: totalRecords,
-    facets: facetsData.facetResults
+    totalRecords: allOccurrences.length,
+    facets: summaryData.facetResults
   };
   
   const summaryPath = path.join(DATA_DIR, 'summary.json');
