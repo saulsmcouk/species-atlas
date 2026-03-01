@@ -24,6 +24,7 @@ class WoodlarkApp {
       this.initMap();
       this.initTimeline();
       this.initSeasonalWheel();
+      this.initExplorer();
       this.initScrollAnimations();
     } catch (error) {
       console.error('Failed to initialize app:', error);
@@ -516,6 +517,336 @@ class WoodlarkApp {
         </div>
       `;
     }).join('');
+  }
+  
+  // =========================================
+  // Data Explorer
+  // =========================================
+  initExplorer() {
+    this.explorerPage = 1;
+    this.explorerPageSize = 50;
+    this.explorerSort = { key: 'year', dir: 'desc' };
+    this.filteredData = [...this.data.occurrences];
+    
+    this.populateRegionFilter();
+    this.bindExplorerEvents();
+    this.updateExplorerTable();
+  }
+  
+  populateRegionFilter() {
+    const regionSelect = document.getElementById('filter-region');
+    if (!regionSelect) return;
+    
+    const regions = Object.keys(this.regionData).sort();
+    regions.forEach(region => {
+      if (region && region !== 'Unknown') {
+        const option = document.createElement('option');
+        option.value = region;
+        option.textContent = region;
+        regionSelect.appendChild(option);
+      }
+    });
+  }
+  
+  bindExplorerEvents() {
+    // Apply filters button
+    const applyBtn = document.getElementById('apply-filters');
+    if (applyBtn) {
+      applyBtn.addEventListener('click', () => this.applyFilters());
+    }
+    
+    // Reset filters button
+    const resetBtn = document.getElementById('reset-filters');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', () => this.resetFilters());
+    }
+    
+    // Export CSV button
+    const exportBtn = document.getElementById('export-csv');
+    if (exportBtn) {
+      exportBtn.addEventListener('click', () => this.exportCSV());
+    }
+    
+    // Pagination buttons
+    const prevBtn = document.getElementById('page-prev');
+    const nextBtn = document.getElementById('page-next');
+    
+    if (prevBtn) {
+      prevBtn.addEventListener('click', () => {
+        if (this.explorerPage > 1) {
+          this.explorerPage--;
+          this.updateExplorerTable();
+        }
+      });
+    }
+    
+    if (nextBtn) {
+      nextBtn.addEventListener('click', () => {
+        const totalPages = Math.ceil(this.filteredData.length / this.explorerPageSize);
+        if (this.explorerPage < totalPages) {
+          this.explorerPage++;
+          this.updateExplorerTable();
+        }
+      });
+    }
+    
+    // Table header sorting
+    const headers = document.querySelectorAll('.data-table th[data-sort]');
+    headers.forEach(header => {
+      header.addEventListener('click', () => {
+        const key = header.dataset.sort;
+        if (this.explorerSort.key === key) {
+          this.explorerSort.dir = this.explorerSort.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+          this.explorerSort.key = key;
+          this.explorerSort.dir = 'asc';
+        }
+        this.sortFilteredData();
+        this.updateExplorerTable();
+      });
+    });
+  }
+  
+  applyFilters() {
+    const yearMin = parseInt(document.getElementById('filter-year-min')?.value) || null;
+    const yearMax = parseInt(document.getElementById('filter-year-max')?.value) || null;
+    const region = document.getElementById('filter-region')?.value || '';
+    const month = parseInt(document.getElementById('filter-month')?.value) || null;
+    const season = document.getElementById('filter-season')?.value || '';
+    
+    const seasonMonths = {
+      spring: [3, 4, 5],
+      summer: [6, 7, 8],
+      autumn: [9, 10, 11],
+      winter: [12, 1, 2]
+    };
+    
+    this.filteredData = this.data.occurrences.filter(occ => {
+      // Year range filter
+      if (yearMin && occ.year < yearMin) return false;
+      if (yearMax && occ.year > yearMax) return false;
+      
+      // Region filter
+      if (region && occ.stateProvince !== region) return false;
+      
+      // Month filter (takes precedence over season)
+      if (month) {
+        const occMonth = parseInt(occ.month);
+        if (occMonth !== month) return false;
+      } else if (season && seasonMonths[season]) {
+        const occMonth = parseInt(occ.month);
+        if (!seasonMonths[season].includes(occMonth)) return false;
+      }
+      
+      return true;
+    });
+    
+    this.sortFilteredData();
+    this.explorerPage = 1;
+    this.updateExplorerTable();
+  }
+  
+  resetFilters() {
+    // Clear filter inputs
+    const yearMin = document.getElementById('filter-year-min');
+    const yearMax = document.getElementById('filter-year-max');
+    const region = document.getElementById('filter-region');
+    const month = document.getElementById('filter-month');
+    const season = document.getElementById('filter-season');
+    
+    if (yearMin) yearMin.value = '';
+    if (yearMax) yearMax.value = '';
+    if (region) region.value = '';
+    if (month) month.value = '';
+    if (season) season.value = '';
+    
+    // Reset data
+    this.filteredData = [...this.data.occurrences];
+    this.explorerPage = 1;
+    this.sortFilteredData();
+    this.updateExplorerTable();
+  }
+  
+  sortFilteredData() {
+    const { key, dir } = this.explorerSort;
+    
+    this.filteredData.sort((a, b) => {
+      let aVal, bVal;
+      
+      switch (key) {
+        case 'year':
+          aVal = a.year || 0;
+          bVal = b.year || 0;
+          break;
+        case 'month':
+          aVal = parseInt(a.month) || 0;
+          bVal = parseInt(b.month) || 0;
+          break;
+        case 'region':
+          aVal = a.stateProvince || '';
+          bVal = b.stateProvince || '';
+          break;
+        case 'lat':
+          aVal = a.decimalLatitude || 0;
+          bVal = b.decimalLatitude || 0;
+          break;
+        case 'lng':
+          aVal = a.decimalLongitude || 0;
+          bVal = b.decimalLongitude || 0;
+          break;
+        case 'basis':
+          aVal = a.basisOfRecord || '';
+          bVal = b.basisOfRecord || '';
+          break;
+        default:
+          aVal = a[key] || '';
+          bVal = b[key] || '';
+      }
+      
+      if (typeof aVal === 'string') {
+        return dir === 'asc' 
+          ? aVal.localeCompare(bVal) 
+          : bVal.localeCompare(aVal);
+      }
+      
+      return dir === 'asc' ? aVal - bVal : bVal - aVal;
+    });
+    
+    // Update sort indicators
+    const headers = document.querySelectorAll('.data-table th[data-sort]');
+    headers.forEach(h => {
+      h.removeAttribute('data-sort-active');
+      if (h.dataset.sort === key) {
+        h.setAttribute('data-sort-active', dir);
+      }
+    });
+  }
+  
+  updateExplorerTable() {
+    const tbody = document.getElementById('data-table-body');
+    const countEl = document.getElementById('filtered-count');
+    const currentPageEl = document.getElementById('current-page');
+    const totalPagesEl = document.getElementById('total-pages');
+    const prevBtn = document.getElementById('page-prev');
+    const nextBtn = document.getElementById('page-next');
+    
+    if (!tbody) return;
+    
+    const totalRecords = this.filteredData.length;
+    const totalPages = Math.max(1, Math.ceil(totalRecords / this.explorerPageSize));
+    
+    // Ensure page is in bounds
+    this.explorerPage = Math.min(this.explorerPage, totalPages);
+    this.explorerPage = Math.max(1, this.explorerPage);
+    
+    // Update count
+    if (countEl) {
+      countEl.textContent = totalRecords.toLocaleString();
+    }
+    
+    // Update pagination display
+    if (currentPageEl) currentPageEl.textContent = this.explorerPage;
+    if (totalPagesEl) totalPagesEl.textContent = totalPages;
+    
+    // Enable/disable pagination buttons
+    if (prevBtn) prevBtn.disabled = this.explorerPage <= 1;
+    if (nextBtn) nextBtn.disabled = this.explorerPage >= totalPages;
+    
+    // Get page data
+    const startIdx = (this.explorerPage - 1) * this.explorerPageSize;
+    const endIdx = startIdx + this.explorerPageSize;
+    const pageData = this.filteredData.slice(startIdx, endIdx);
+    
+    const monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    
+    if (pageData.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="6" class="data-table-empty">
+            No records match your filter criteria
+          </td>
+        </tr>
+      `;
+      return;
+    }
+    
+    tbody.innerHTML = pageData.map(occ => {
+      const month = parseInt(occ.month);
+      const monthName = monthNames[month] || '—';
+      const lat = occ.decimalLatitude ? occ.decimalLatitude.toFixed(4) : '—';
+      const lng = occ.decimalLongitude ? occ.decimalLongitude.toFixed(4) : '—';
+      const basis = this.formatBasisOfRecord(occ.basisOfRecord);
+      
+      return `
+        <tr>
+          <td>${occ.year || '—'}</td>
+          <td>${monthName}</td>
+          <td>${occ.stateProvince || '—'}</td>
+          <td>${lat}</td>
+          <td>${lng}</td>
+          <td>${basis}</td>
+        </tr>
+      `;
+    }).join('');
+  }
+  
+  formatBasisOfRecord(basis) {
+    if (!basis) return '—';
+    // Convert camelCase/PascalCase to readable format
+    const formatted = basis
+      .replace(/([A-Z])/g, ' $1')
+      .replace(/^./, str => str.toUpperCase())
+      .trim();
+    return formatted;
+  }
+  
+  exportCSV() {
+    if (this.filteredData.length === 0) {
+      alert('No data to export. Please adjust your filters.');
+      return;
+    }
+    
+    // CSV headers
+    const headers = ['Year', 'Month', 'Region', 'Latitude', 'Longitude', 'Record Type', 'Scientific Name', 'Vernacular Name'];
+    
+    // Build CSV content
+    const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June', 
+                        'July', 'August', 'September', 'October', 'November', 'December'];
+    
+    const rows = this.filteredData.map(occ => {
+      const month = parseInt(occ.month);
+      return [
+        occ.year || '',
+        monthNames[month] || '',
+        occ.stateProvince || '',
+        occ.decimalLatitude || '',
+        occ.decimalLongitude || '',
+        occ.basisOfRecord || '',
+        occ.scientificName || 'Lullula arborea',
+        occ.vernacularName || 'Woodlark'
+      ].map(val => {
+        // Escape quotes and wrap in quotes if contains comma
+        const str = String(val);
+        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+          return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+      }).join(',');
+    });
+    
+    const csvContent = [headers.join(','), ...rows].join('\n');
+    
+    // Create download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `woodlark-occurrences-${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   }
 }
 
