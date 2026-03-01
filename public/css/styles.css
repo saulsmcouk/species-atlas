@@ -29,6 +29,13 @@
   --feather-cream: #F5E6D3;
   --beak-gold: #DAA520;
   
+  /* Species comparison colors (burnt umber family) */
+  --species-1: #2A6B6B; /* Deep Teal */
+  --species-2: #A0522D; /* Burnt Sienna */
+  --species-3: #B8860B; /* Dusty Gold */
+  --species-4: #5D7B5D; /* Forest Sage */
+  --species-5: #6B4B5C; /* Plum */
+  
   /* Typography */
   --font-display: 'Playfair Display', Georgia, serif;
   --font-body: 'Crimson Pro', Georgia, serif;
@@ -479,6 +486,40 @@ section {
   overflow: hidden;
 }
 
+/* Map legend for comparison mode */
+.map-legend {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  background: rgba(248, 244, 235, 0.95);
+  border: 2px solid var(--golden-amber);
+  border-radius: 12px;
+  padding: 12px 16px;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(93, 78, 55, 0.15);
+}
+
+.map-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: var(--sepia-ink);
+  white-space: nowrap;
+}
+
+.map-legend-item + .map-legend-item {
+  margin-top: 6px;
+}
+
+.map-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
 #uk-map {
   width: 100%;
   height: 100%;
@@ -617,6 +658,7 @@ section {
 
 .year-slider {
   -webkit-appearance: none;
+  appearance: none;
   width: 100%;
   height: 8px;
   background: var(--parchment-dark);
@@ -627,6 +669,7 @@ section {
 
 .year-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
+  appearance: none;
   width: 24px;
   height: 24px;
   background: var(--burnt-sienna);
@@ -671,6 +714,62 @@ section {
   font-family: var(--font-data);
   color: var(--burnt-sienna);
   font-weight: 600;
+}
+
+.region-bar-container {
+  flex: 1;
+  height: 8px;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+  margin: 0 var(--space-sm);
+  overflow: hidden;
+}
+
+.region-bar {
+  height: 100%;
+  background: var(--burnt-sienna);
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+
+/* Comparison region stats with grouped bars */
+.region-stat-compare {
+  flex-direction: column;
+  align-items: stretch;
+  padding: var(--space-sm) 0;
+}
+
+.region-stat-compare .region-name {
+  margin-bottom: var(--space-xs);
+  font-weight: 600;
+}
+
+.region-bars-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.region-bar-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.region-bar-icon {
+  font-size: 0.85rem;
+  width: 24px;
+  text-align: center;
+}
+
+.region-bar-row .region-bar-container {
+  margin: 0;
+}
+
+.region-bar-row .region-count {
+  min-width: 60px;
+  text-align: right;
+  font-size: 0.85rem;
 }
 
 /* Location Filter */
@@ -885,6 +984,7 @@ section {
 
 .radius-slider {
   -webkit-appearance: none;
+  appearance: none;
   width: 100%;
   height: 6px;
   background: var(--parchment);
@@ -895,6 +995,7 @@ section {
 
 .radius-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
+  appearance: none;
   width: 18px;
   height: 18px;
   background: var(--burnt-sienna);
@@ -1075,6 +1176,44 @@ section {
   background: var(--golden-amber);
 }
 
+/* Comparison Timeline (Line Chart) */
+.timeline-chart {
+  width: 100%;
+  height: 100%;
+}
+
+.timeline-line {
+  transition: stroke-width 0.2s ease;
+}
+
+.timeline-line:hover {
+  stroke-width: 3;
+}
+
+.timeline-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-md);
+  padding: var(--space-md) 0;
+  margin-top: var(--space-sm);
+}
+
+.timeline-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  color: var(--parchment);
+}
+
+.legend-line {
+  width: 24px;
+  height: 3px;
+  border-radius: 2px;
+}
+
 /* ==========================================================================
    Seasonal Wheel Section
    ========================================================================== */
@@ -1148,6 +1287,32 @@ section {
   font-size: 14px;
   fill: var(--sepia-ink);
   opacity: 0.85;
+}
+
+/* Wheel legend for comparison mode */
+.wheel-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+  padding: var(--space-sm);
+}
+
+.wheel-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  color: var(--sepia-ink);
+}
+
+.wheel-legend-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
 /* Season legend */
@@ -1343,6 +1508,62 @@ section {
   color: var(--sepia-ink);
   line-height: 1.5;
   opacity: 0.85;
+}
+
+/* Comparison insight cards */
+.insight-compare-grid {
+  text-align: left;
+}
+
+.insight-compare-grid .insight-icon {
+  position: absolute;
+  top: var(--space-md);
+  right: var(--space-md);
+  margin: 0;
+  font-size: 1.5rem;
+  opacity: 0.5;
+}
+
+.insight-compare-grid .insight-label {
+  margin-bottom: var(--space-sm);
+  font-weight: 600;
+}
+
+.compare-values {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.compare-value-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-family: var(--font-data);
+  font-size: 0.9rem;
+  color: var(--sepia-ink);
+}
+
+.compare-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.compare-name {
+  flex-shrink: 0;
+  font-size: 0.85rem;
+}
+
+.compare-num {
+  margin-left: auto;
+  font-weight: 600;
+  color: var(--burnt-sienna);
+}
+
+.insight-correlation .insight-value {
+  font-size: 2.5rem;
 }
 
 /* Story block */
@@ -2448,6 +2669,269 @@ section {
 .featured-name {
   font-weight: 500;
 }
+
+/* ==========================================================================
+   Multi-Species Search UI
+   ========================================================================== */
+
+.species-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
+}
+
+.species-row {
+  position: relative;
+  animation: slideInRow 0.3s var(--ease-out-expo);
+}
+
+@keyframes slideInRow {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.species-row .search-box {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  background: var(--parchment);
+  border: 2px solid var(--golden-amber);
+  border-radius: 25px;
+  padding: var(--space-xs) var(--space-sm);
+  box-shadow: 0 8px 32px rgba(93, 78, 55, 0.15);
+  transition: all 0.3s ease;
+  min-height: 52px;
+}
+
+.species-row .search-box:focus-within {
+  border-color: var(--burnt-sienna);
+  box-shadow: 0 12px 48px rgba(160, 82, 45, 0.2);
+}
+
+.species-row .search-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: var(--space-xs);
+  z-index: 1000;
+}
+
+/* Species Pills */
+.species-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.species-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--species-1);
+  color: var(--parchment);
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  font-weight: 500;
+  border-radius: 20px;
+  animation: pillAppear 0.25s var(--ease-out-expo);
+}
+
+@keyframes pillAppear {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.species-pill[data-color="1"] { background: var(--species-1); }
+.species-pill[data-color="2"] { background: var(--species-2); }
+.species-pill[data-color="3"] { background: var(--species-3); }
+.species-pill[data-color="4"] { background: var(--species-4); }
+.species-pill[data-color="5"] { background: var(--species-5); }
+
+.species-pill .pill-icon {
+  font-size: 0.9rem;
+}
+
+.species-pill .pill-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.25);
+  border: none;
+  border-radius: 50%;
+  color: var(--parchment);
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.species-pill .pill-remove:hover {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+/* Search input within row */
+.species-row .search-input {
+  flex: 1;
+  min-width: 150px;
+  padding: var(--space-xs);
+  font-family: var(--font-body);
+  font-size: 1rem;
+  color: var(--sepia-ink);
+  background: transparent;
+  border: none;
+  outline: none;
+}
+
+.species-row .search-input::placeholder {
+  color: var(--sepia-light);
+  opacity: 0.7;
+}
+
+/* Row remove button */
+.species-row .row-remove {
+  position: absolute;
+  top: 50%;
+  right: -36px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: rgba(160, 82, 45, 0.1);
+  border: 1px dashed var(--sepia-light);
+  border-radius: 50%;
+  color: var(--sepia-light);
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  opacity: 0;
+}
+
+.species-row:hover .row-remove {
+  opacity: 1;
+}
+
+.species-row .row-remove:hover {
+  background: rgba(160, 82, 45, 0.2);
+  border-color: var(--burnt-sienna);
+  color: var(--burnt-sienna);
+}
+
+/* Add Species Button */
+.add-species-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  width: 100%;
+  padding: var(--space-sm);
+  margin-bottom: var(--space-sm);
+  background: transparent;
+  border: 2px dashed var(--sepia-light);
+  border-radius: 25px;
+  color: var(--sepia-light);
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  opacity: 0.7;
+}
+
+.add-species-btn:hover {
+  opacity: 1;
+  border-color: var(--golden-amber);
+  color: var(--sepia-ink);
+  background: rgba(212, 165, 116, 0.1);
+}
+
+.add-species-btn svg {
+  opacity: 0.7;
+}
+
+/* Explore Button */
+.explore-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  width: 100%;
+  padding: var(--space-sm) var(--space-lg);
+  font-family: var(--font-body);
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--parchment);
+  background: var(--burnt-sienna);
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 16px rgba(160, 82, 45, 0.3);
+}
+
+.explore-btn:hover:not(:disabled) {
+  background: var(--heathland);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(160, 82, 45, 0.4);
+}
+
+.explore-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Species Color Legend */
+.species-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  justify-content: center;
+  padding: var(--space-sm);
+  background: rgba(248, 244, 235, 0.5);
+  border-radius: 12px;
+  margin-bottom: var(--space-md);
+}
+
+.species-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  color: var(--sepia-ink);
+}
+
+.species-legend-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.species-legend-dot[data-color="1"] { background: var(--species-1); }
+.species-legend-dot[data-color="2"] { background: var(--species-2); }
+.species-legend-dot[data-color="3"] { background: var(--species-3); }
+.species-legend-dot[data-color="4"] { background: var(--species-4); }
+.species-legend-dot[data-color="5"] { background: var(--species-5); }
 
 /* About Section */
 .landing-about {

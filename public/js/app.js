@@ -3,8 +3,23 @@
  * Interactive data visualization for any species from NBN Atlas
  */
 
+// Species comparison color palette
+const SPECIES_COLORS = [
+  '#2A6B6B', // Deep Teal
+  '#A0522D', // Burnt Sienna
+  '#B8860B', // Dusty Gold
+  '#5D7B5D', // Forest Sage
+  '#6B4B5C'  // Plum
+];
+
 class SpeciesExplorer {
   constructor() {
+    // Multi-species support
+    this.selectedSpecies = []; // Array of { guid, name, scientificName, icon, colorIndex }
+    this.speciesData = {};     // { [guid]: { info, occurrences, yearData, monthData, regionData } }
+    this.isCompareMode = false;
+    
+    // Legacy single-species references (for backward compatibility)
     this.species = null;
     this.data = null;
     this.yearData = {};
@@ -14,6 +29,9 @@ class SpeciesExplorer {
     this.map = null;
     this.markersLayer = null;
     this.radiusCircle = null;
+    
+    // Map display mode
+    this.mapDisplayMode = 'overlay'; // 'overlay' or 'sidebyside'
     
     // Location filter state
     this.locationFilter = {
@@ -37,13 +55,44 @@ class SpeciesExplorer {
   // Location Filter Logic
   // =========================================
   
-  // Get occurrences filtered by both year and location
-  getFilteredOccurrences() {
+  // Get occurrences filtered by both year and location (for a specific species or all)
+  getFilteredOccurrences(guid = null) {
     let occurrences;
-    if (this.currentYear === 'all') {
-      occurrences = this.data?.occurrences || [];
+    
+    if (guid && this.speciesData[guid]) {
+      // Get occurrences for specific species
+      const speciesInfo = this.speciesData[guid];
+      if (this.currentYear === 'all') {
+        occurrences = speciesInfo.occurrences || [];
+      } else {
+        occurrences = speciesInfo.yearData?.[this.currentYear] || [];
+      }
+    } else if (this.isCompareMode && this.selectedSpecies.length > 1) {
+      // Get combined occurrences for all selected species
+      occurrences = [];
+      this.selectedSpecies.forEach(sp => {
+        const spData = this.speciesData[sp.guid];
+        if (spData) {
+          const spOccurrences = this.currentYear === 'all' 
+            ? (spData.occurrences || [])
+            : (spData.yearData?.[this.currentYear] || []);
+          // Add species metadata to each occurrence
+          occurrences.push(...spOccurrences.map(occ => ({ 
+            ...occ, 
+            _speciesGuid: sp.guid,
+            _speciesName: sp.name,
+            _speciesIcon: sp.icon,
+            _speciesColorIndex: sp.colorIndex
+          })));
+        }
+      });
     } else {
-      occurrences = this.yearData[this.currentYear] || [];
+      // Legacy single-species mode
+      if (this.currentYear === 'all') {
+        occurrences = this.data?.occurrences || [];
+      } else {
+        occurrences = this.yearData[this.currentYear] || [];
+      }
     }
     
     // Apply location filter
@@ -401,7 +450,10 @@ class SpeciesExplorer {
   handleRouting() {
     const hash = window.location.hash;
     
-    if (hash.startsWith('#/species/')) {
+    if (hash.startsWith('#/compare/')) {
+      const guids = hash.replace('#/compare/', '').split('/').filter(g => g);
+      this.loadMultipleSpecies(guids);
+    } else if (hash.startsWith('#/species/')) {
       const guid = hash.replace('#/species/', '');
       this.loadSpecies(guid);
     } else {
@@ -411,13 +463,253 @@ class SpeciesExplorer {
     // Handle browser back/forward
     window.addEventListener('hashchange', () => {
       const newHash = window.location.hash;
-      if (newHash.startsWith('#/species/')) {
+      if (newHash.startsWith('#/compare/')) {
+        const guids = newHash.replace('#/compare/', '').split('/').filter(g => g);
+        this.loadMultipleSpecies(guids);
+      } else if (newHash.startsWith('#/species/')) {
         const guid = newHash.replace('#/species/', '');
         this.loadSpecies(guid);
       } else {
         this.showLanding();
       }
     });
+  }
+  
+  // Load multiple species for comparison
+  async loadMultipleSpecies(guids) {
+    if (!guids || guids.length === 0) {
+      this.showLanding();
+      return;
+    }
+    
+    this.isCompareMode = guids.length > 1;
+    this.speciesData = {};
+    
+    // Load each species sequentially (handles modals)
+    for (let i = 0; i < guids.length; i++) {
+      const guid = guids[i];
+      const isLast = i === guids.length - 1;
+      
+      // Update loading text to show which species we're loading
+      this.showLoading(`Loading species ${i + 1} of ${guids.length}...`);
+      
+      await this.loadSingleSpeciesData(guid, i);
+      
+      // If this is the last species, continue to visualization
+      if (isLast) {
+        this.finalizeMultiSpeciesLoad();
+      }
+    }
+  }
+  
+  // Load a single species data (for comparison mode)
+  async loadSingleSpeciesData(guid, speciesIndex) {
+    try {
+      // Get facets first
+      const facetsRes = await fetch(`/api/species/${encodeURIComponent(guid)}/facets`);
+      const facets = await facetsRes.json();
+      
+      // Get species info
+      const searchRes = await fetch(`/api/species/search?q=${encodeURIComponent(guid)}&pageSize=1`);
+      const searchData = await searchRes.json();
+      
+      const speciesInfo = searchData.results[0] || {
+        guid,
+        scientificName: 'Unknown Species',
+        commonName: ''
+      };
+      
+      // Add to selectedSpecies if not already there
+      if (!this.selectedSpecies.some(s => s.guid === guid)) {
+        const icon = this.getSpeciesIcon(speciesInfo.speciesGroup);
+        this.selectedSpecies.push({
+          guid,
+          name: speciesInfo.commonName || speciesInfo.scientificName,
+          scientificName: speciesInfo.scientificName,
+          icon,
+          colorIndex: (this.selectedSpecies.length % SPECIES_COLORS.length) + 1
+        });
+      }
+      
+      const totalRecords = facets.totalRecords || 0;
+      
+      // Initialize species data structure
+      this.speciesData[guid] = {
+        info: speciesInfo,
+        occurrences: [],
+        yearData: {},
+        monthData: {},
+        regionData: {},
+        facets,
+        totalRecords
+      };
+      
+      // Check if we need to show modal for large datasets
+      if (totalRecords > 50000) {
+        // Show modal and wait for user choice
+        const options = await this.showDatasetWarningModal(speciesInfo, facets, totalRecords);
+        if (options === null) {
+          // User cancelled
+          this.showLanding();
+          return;
+        }
+        await this.loadSpeciesOccurrences(guid, options);
+      } else {
+        // Load all data directly
+        await this.loadSpeciesOccurrences(guid, { type: 'load-all' });
+      }
+      
+    } catch (error) {
+      console.error(`Error loading species ${guid}:`, error);
+    }
+  }
+  
+  // Load occurrences for a species (in comparison mode)
+  async loadSpeciesOccurrences(guid, options) {
+    const speciesData = this.speciesData[guid];
+    if (!speciesData) return;
+    
+    const speciesInfo = this.selectedSpecies.find(s => s.guid === guid);
+    const speciesName = speciesInfo?.name || 'Species';
+    
+    this.updateLoadingText(`Fetching ${speciesName} occurrences...`);
+    
+    // Use existing loading logic but store in speciesData
+    // This is simplified - will use streaming endpoint
+    const years = speciesData.facets.yearFacets || [];
+    const sortedYears = years.sort((a, b) => parseInt(b.name) - parseInt(a.name));
+    
+    // Apply year range filter if specified
+    let yearsToFetch = sortedYears;
+    if (options.type === 'year-range') {
+      yearsToFetch = sortedYears.filter(y => {
+        const year = parseInt(y.name);
+        return year >= options.fromYear && year <= options.toYear;
+      });
+    } else if (options.type === 'record-limit') {
+      // Fetch years until we hit the limit
+      let totalSoFar = 0;
+      yearsToFetch = [];
+      for (const y of sortedYears) {
+        if (totalSoFar >= options.limit) break;
+        yearsToFetch.push(y);
+        totalSoFar += y.count;
+      }
+    }
+    
+    // Fetch occurrences via SSE
+    const allOccurrences = [];
+    
+    for (const yearInfo of yearsToFetch) {
+      const year = yearInfo.name;
+      try {
+        const response = await fetch(`/api/species/${encodeURIComponent(guid)}/occurrences/${year}`);
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n\n');
+          buffer = lines.pop() || '';
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                if (data.type === 'progress') {
+                  this.updateLoadingText(`${speciesName}: ${data.year} - ${data.records.toLocaleString()} records`);
+                } else if (data.type === 'yearComplete' && data.occurrences) {
+                  allOccurrences.push(...data.occurrences);
+                  speciesData.yearData[year] = data.occurrences;
+                }
+              } catch (e) {}
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`Error fetching ${speciesName} year ${year}:`, error);
+      }
+    }
+    
+    speciesData.occurrences = allOccurrences;
+    this.processSpeciesData(guid);
+  }
+  
+  // Process loaded species data
+  processSpeciesData(guid) {
+    const speciesData = this.speciesData[guid];
+    if (!speciesData) return;
+    
+    // Build month data
+    speciesData.monthData = {};
+    speciesData.occurrences.forEach(occ => {
+      const month = occ.month;
+      if (month) {
+        if (!speciesData.monthData[month]) speciesData.monthData[month] = [];
+        speciesData.monthData[month].push(occ);
+      }
+    });
+    
+    // Build region data
+    speciesData.regionData = {};
+    speciesData.occurrences.forEach(occ => {
+      const region = occ.stateProvince || 'Unknown';
+      if (!speciesData.regionData[region]) speciesData.regionData[region] = [];
+      speciesData.regionData[region].push(occ);
+    });
+  }
+  
+  // Finalize after all species loaded
+  finalizeMultiSpeciesLoad() {
+    // Set up legacy single-species references for first species (backward compat)
+    const firstGuid = this.selectedSpecies[0]?.guid;
+    if (firstGuid && this.speciesData[firstGuid]) {
+      const firstData = this.speciesData[firstGuid];
+      this.species = firstData.info;
+      this.data = { occurrences: firstData.occurrences };
+      this.yearData = firstData.yearData;
+      this.monthData = firstData.monthData;
+      this.regionData = firstData.regionData;
+    }
+    
+    // Combine all grid refs
+    this.extractAllGridRefs();
+    
+    // Update UI for comparison mode
+    this.updatePageTitle();
+    this.hideLoading();
+    this.showVisualization();
+    this.initVisualizations();
+  }
+  
+  extractAllGridRefs() {
+    const gridRefSet = new Set();
+    
+    Object.values(this.speciesData).forEach(spData => {
+      spData.occurrences.forEach(occ => {
+        if (occ.gridReference) {
+          const match = occ.gridReference.match(/^([A-Z]{1,2}\d{1,2})/i);
+          if (match) {
+            gridRefSet.add(match[1].toUpperCase());
+          }
+        }
+      });
+    });
+    
+    this.allGridRefs = Array.from(gridRefSet).sort();
+  }
+  
+  updatePageTitle() {
+    if (this.isCompareMode) {
+      const names = this.selectedSpecies.map(s => s.name).join(' vs ');
+      document.title = `Compare: ${names} | NBN Atlas`;
+    } else if (this.selectedSpecies.length === 1) {
+      document.title = `${this.selectedSpecies[0].name} | NBN Atlas Species Explorer`;
+    }
   }
   
   showLanding() {
@@ -436,6 +728,30 @@ class SpeciesExplorer {
       yearDisplay.textContent = 'All Years';
     }
     this.currentYear = 'all';
+    
+    // Reset multi-species selection
+    this.selectedSpecies = [];
+    this.speciesData = {};
+    this.isCompareMode = false;
+    
+    // Clear all pills
+    document.querySelectorAll('.species-pill').forEach(pill => pill.remove());
+    
+    // Remove extra search rows (keep only the first one)
+    const speciesRows = document.getElementById('species-rows');
+    if (speciesRows) {
+      while (speciesRows.children.length > 1) {
+        speciesRows.lastChild.remove();
+      }
+    }
+    
+    // Clear search inputs
+    document.querySelectorAll('.species-search-input').forEach(input => {
+      input.value = '';
+    });
+    
+    // Update explore button
+    this.updateExploreButton();
   }
   
   showVisualization() {
@@ -447,55 +763,30 @@ class SpeciesExplorer {
   // Landing Page Events
   // =========================================
   bindLandingEvents() {
-    const searchInput = document.getElementById('species-search');
-    const searchBtn = document.getElementById('search-btn');
-    const searchResults = document.getElementById('search-results');
     const backLink = document.getElementById('back-to-search');
+    const addSpeciesBtn = document.getElementById('add-species-btn');
+    const exploreBtn = document.getElementById('explore-btn');
     
-    let searchTimeout = null;
+    // Bind initial search row
+    this.bindSearchRowEvents(0);
     
-    // Search input with debounce
-    if (searchInput) {
-      searchInput.addEventListener('input', () => {
-        clearTimeout(searchTimeout);
-        const query = searchInput.value.trim();
-        
-        if (query.length < 2) {
-          searchResults.classList.add('hidden');
-          return;
-        }
-        
-        searchTimeout = setTimeout(() => {
-          this.searchSpecies(query);
-        }, 300);
-      });
-      
-      searchInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          clearTimeout(searchTimeout);
-          const query = searchInput.value.trim();
-          if (query.length >= 2) {
-            this.searchSpecies(query);
-          }
-        }
-      });
+    // Add species button
+    if (addSpeciesBtn) {
+      addSpeciesBtn.addEventListener('click', () => this.addSearchRow());
     }
     
-    // Search button
-    if (searchBtn) {
-      searchBtn.addEventListener('click', () => {
-        const query = searchInput?.value.trim();
-        if (query && query.length >= 2) {
-          this.searchSpecies(query);
-        }
-      });
+    // Explore button
+    if (exploreBtn) {
+      exploreBtn.addEventListener('click', () => this.startExploring());
     }
     
-    // Featured species buttons
+    // Featured species buttons - now add as pills
     document.querySelectorAll('.featured-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const guid = btn.dataset.guid;
-        window.location.hash = `/species/${guid}`;
+        const name = btn.querySelector('.featured-name')?.textContent || 'Species';
+        const icon = btn.querySelector('.featured-icon')?.textContent || '🔬';
+        this.addSpeciesToSelection(guid, name, name, icon);
       });
     });
     
@@ -511,13 +802,99 @@ class SpeciesExplorer {
     // Close search results when clicking outside
     document.addEventListener('click', (e) => {
       if (!e.target.closest('.search-container')) {
-        searchResults?.classList.add('hidden');
+        document.querySelectorAll('.search-results').forEach(sr => sr.classList.add('hidden'));
       }
     });
   }
   
-  async searchSpecies(query) {
-    const searchResults = document.getElementById('search-results');
+  bindSearchRowEvents(rowIndex) {
+    const searchInput = document.getElementById(`species-search-${rowIndex}`);
+    const searchResults = document.getElementById(`search-results-${rowIndex}`);
+    
+    if (!searchInput) return;
+    
+    let searchTimeout = null;
+    
+    // Search input with debounce
+    searchInput.addEventListener('input', () => {
+      clearTimeout(searchTimeout);
+      const query = searchInput.value.trim();
+      
+      if (query.length < 2) {
+        searchResults?.classList.add('hidden');
+        return;
+      }
+      
+      searchTimeout = setTimeout(() => {
+        this.searchSpecies(query, rowIndex);
+      }, 300);
+    });
+    
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        clearTimeout(searchTimeout);
+        const query = searchInput.value.trim();
+        if (query.length >= 2) {
+          this.searchSpecies(query, rowIndex);
+        }
+      }
+    });
+  }
+  
+  addSearchRow() {
+    const speciesRows = document.getElementById('species-rows');
+    if (!speciesRows) return;
+    
+    const rowIndex = speciesRows.children.length;
+    
+    const newRow = document.createElement('div');
+    newRow.className = 'species-row';
+    newRow.dataset.row = rowIndex;
+    newRow.innerHTML = `
+      <div class="search-box">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/>
+          <path d="M21 21l-4.35-4.35"/>
+        </svg>
+        <div class="species-pills" id="species-pills-${rowIndex}"></div>
+        <input 
+          type="text" 
+          id="species-search-${rowIndex}" 
+          class="search-input species-search-input" 
+          placeholder="Search for another species..."
+          autocomplete="off"
+          data-row="${rowIndex}"
+        >
+      </div>
+      <button class="row-remove" title="Remove this row">&times;</button>
+      <div id="search-results-${rowIndex}" class="search-results hidden"></div>
+    `;
+    
+    speciesRows.appendChild(newRow);
+    this.bindSearchRowEvents(rowIndex);
+    
+    // Bind row remove button
+    const removeBtn = newRow.querySelector('.row-remove');
+    removeBtn?.addEventListener('click', () => {
+      // Remove any species from this row
+      const pills = newRow.querySelectorAll('.species-pill');
+      pills.forEach(pill => {
+        const guid = pill.dataset.guid;
+        this.removeSpeciesFromSelection(guid);
+      });
+      newRow.remove();
+      this.updateExploreButton();
+    });
+    
+    // Focus the new input
+    const newInput = document.getElementById(`species-search-${rowIndex}`);
+    newInput?.focus();
+  }
+  
+  async searchSpecies(query, rowIndex = 0) {
+    const searchResults = document.getElementById(`search-results-${rowIndex}`);
+    
+    if (!searchResults) return;
     
     searchResults.classList.remove('hidden');
     searchResults.innerHTML = '<div class="search-loading">Searching...</div>';
@@ -531,10 +908,20 @@ class SpeciesExplorer {
         return;
       }
       
-      searchResults.innerHTML = data.results.map(species => {
+      // Filter out already selected species
+      const availableResults = data.results.filter(
+        species => !this.selectedSpecies.some(s => s.guid === species.guid)
+      );
+      
+      if (availableResults.length === 0) {
+        searchResults.innerHTML = '<div class="search-no-results">All matching species already selected</div>';
+        return;
+      }
+      
+      searchResults.innerHTML = availableResults.map(species => {
         const icon = this.getSpeciesIcon(species.speciesGroup);
         return `
-          <div class="search-result-item" data-guid="${species.guid}">
+          <div class="search-result-item" data-guid="${species.guid}" data-name="${species.commonName || species.scientificName}" data-scientific="${species.scientificName}" data-icon="${icon}">
             ${species.imageUrl 
               ? `<img src="${species.imageUrl}" alt="" class="result-image">` 
               : `<div class="result-image-placeholder">${icon}</div>`
@@ -548,18 +935,128 @@ class SpeciesExplorer {
         `;
       }).join('');
       
-      // Bind click events to results
+      // Bind click events to results - add as pill instead of navigating
       searchResults.querySelectorAll('.search-result-item').forEach(item => {
         item.addEventListener('click', () => {
           const guid = item.dataset.guid;
-          window.location.hash = `/species/${guid}`;
+          const name = item.dataset.name;
+          const scientificName = item.dataset.scientific;
+          const icon = item.dataset.icon;
+          
+          this.addSpeciesToSelection(guid, name, scientificName, icon, rowIndex);
           searchResults.classList.add('hidden');
+          
+          // Clear the search input
+          const searchInput = document.getElementById(`species-search-${rowIndex}`);
+          if (searchInput) searchInput.value = '';
         });
       });
       
     } catch (error) {
       console.error('Search error:', error);
       searchResults.innerHTML = '<div class="search-no-results">Search failed. Please try again.</div>';
+    }
+  }
+  
+  addSpeciesToSelection(guid, name, scientificName, icon, rowIndex = 0) {
+    // Check if already selected
+    if (this.selectedSpecies.some(s => s.guid === guid)) return;
+    
+    // Assign color index
+    const colorIndex = (this.selectedSpecies.length % SPECIES_COLORS.length) + 1;
+    
+    const speciesInfo = {
+      guid,
+      name,
+      scientificName,
+      icon,
+      colorIndex
+    };
+    
+    this.selectedSpecies.push(speciesInfo);
+    
+    // Add pill to the appropriate row
+    const pillsContainer = document.getElementById(`species-pills-${rowIndex}`);
+    if (pillsContainer) {
+      const pill = document.createElement('span');
+      pill.className = 'species-pill';
+      pill.dataset.guid = guid;
+      pill.dataset.color = colorIndex;
+      pill.innerHTML = `
+        <span class="pill-icon">${icon}</span>
+        <span class="pill-name">${name}</span>
+        <button class="pill-remove" title="Remove">&times;</button>
+      `;
+      
+      pillsContainer.appendChild(pill);
+      
+      // Bind remove button
+      pill.querySelector('.pill-remove')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.removeSpeciesFromSelection(guid);
+      });
+    }
+    
+    this.updateExploreButton();
+  }
+  
+  removeSpeciesFromSelection(guid) {
+    this.selectedSpecies = this.selectedSpecies.filter(s => s.guid !== guid);
+    
+    // Remove pill from DOM
+    const pill = document.querySelector(`.species-pill[data-guid="${guid}"]`);
+    if (pill) {
+      pill.style.animation = 'pillAppear 0.2s ease reverse';
+      setTimeout(() => pill.remove(), 200);
+    }
+    
+    this.updateExploreButton();
+  }
+  
+  updateExploreButton() {
+    const exploreBtn = document.getElementById('explore-btn');
+    if (!exploreBtn) return;
+    
+    const hasSelection = this.selectedSpecies.length > 0;
+    exploreBtn.disabled = !hasSelection;
+    
+    // Update button text based on selection count
+    const count = this.selectedSpecies.length;
+    if (count === 0) {
+      exploreBtn.innerHTML = `
+        <span>Explore</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+          <path d="M5 12h14M12 5l7 7-7 7"/>
+        </svg>
+      `;
+    } else if (count === 1) {
+      exploreBtn.innerHTML = `
+        <span>Explore ${this.selectedSpecies[0].name}</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+          <path d="M5 12h14M12 5l7 7-7 7"/>
+        </svg>
+      `;
+    } else {
+      exploreBtn.innerHTML = `
+        <span>Compare ${count} Species</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+          <path d="M5 12h14M12 5l7 7-7 7"/>
+        </svg>
+      `;
+    }
+  }
+  
+  startExploring() {
+    if (this.selectedSpecies.length === 0) return;
+    
+    this.isCompareMode = this.selectedSpecies.length > 1;
+    
+    // Build URL hash
+    if (this.isCompareMode) {
+      const guids = this.selectedSpecies.map(s => s.guid).join('/');
+      window.location.hash = `/compare/${guids}`;
+    } else {
+      window.location.hash = `/species/${this.selectedSpecies[0].guid}`;
     }
   }
   
@@ -683,6 +1180,109 @@ class SpeciesExplorer {
       this.bindModalEvents();
       this.modalEventsBound = true;
     }
+  }
+  
+  // Promise-based modal for comparison mode
+  showDatasetWarningModal(speciesInfo, facets, totalRecords) {
+    return new Promise((resolve) => {
+      const modal = document.getElementById('dataset-warning-modal');
+      const totalEl = document.getElementById('warning-total-records');
+      const yearFromSelect = document.getElementById('year-from');
+      const yearToSelect = document.getElementById('year-to');
+      const loadAllWarning = document.getElementById('load-all-warning');
+      const cancelBtn = document.getElementById('warning-cancel');
+      const proceedBtn = document.getElementById('warning-proceed');
+      const modalHeader = modal.querySelector('.modal-header h2');
+      
+      // Update modal title to show species name
+      if (modalHeader) {
+        modalHeader.textContent = `Large Dataset: ${speciesInfo.commonName || speciesInfo.scientificName}`;
+      }
+      
+      // Update total records display
+      if (totalEl) totalEl.textContent = totalRecords.toLocaleString();
+      
+      // Calculate estimated load time
+      const estimatedMinutes = Math.ceil(totalRecords / 10000);
+      if (loadAllWarning) {
+        loadAllWarning.textContent = `This may take ${estimatedMinutes}+ minutes`;
+      }
+      
+      // Store year facet data for this species
+      this.yearFacetData = facets.yearFacets?.map(y => ({ year: parseInt(y.name), count: y.count })) || [];
+      
+      // Populate year dropdowns
+      const years = this.yearFacetData.map(y => y.year).sort((a, b) => a - b);
+      const minYear = years[0] || 2000;
+      const maxYear = years[years.length - 1] || new Date().getFullYear();
+      
+      yearFromSelect.innerHTML = '';
+      yearToSelect.innerHTML = '';
+      
+      for (let y = maxYear; y >= minYear; y--) {
+        yearFromSelect.innerHTML += `<option value="${y}">${y}</option>`;
+        yearToSelect.innerHTML += `<option value="${y}">${y}</option>`;
+      }
+      
+      // Default to last 5 years
+      const defaultFrom = Math.max(minYear, maxYear - 4);
+      yearFromSelect.value = defaultFrom;
+      yearToSelect.value = maxYear;
+      
+      this.updateYearEstimate();
+      
+      // Show modal
+      modal.classList.remove('hidden');
+      
+      // One-time event handlers
+      const handleCancel = () => {
+        modal.classList.add('hidden');
+        cleanup();
+        resolve(null);
+      };
+      
+      const handleProceed = () => {
+        modal.classList.add('hidden');
+        
+        const yearRangeRadio = document.getElementById('radio-year-range');
+        const recordLimitRadio = document.getElementById('radio-record-limit');
+        
+        let options = {};
+        
+        if (yearRangeRadio.checked) {
+          options = {
+            type: 'year-range',
+            fromYear: parseInt(yearFromSelect.value),
+            toYear: parseInt(yearToSelect.value)
+          };
+        } else if (recordLimitRadio.checked) {
+          const activeBtn = document.querySelector('.record-limit-btn.active');
+          options = {
+            type: 'record-limit',
+            limit: parseInt(activeBtn?.dataset.limit || 25000)
+          };
+        } else {
+          options = { type: 'load-all' };
+        }
+        
+        cleanup();
+        resolve(options);
+      };
+      
+      const cleanup = () => {
+        cancelBtn.removeEventListener('click', handleCancel);
+        proceedBtn.removeEventListener('click', handleProceed);
+      };
+      
+      cancelBtn.addEventListener('click', handleCancel);
+      proceedBtn.addEventListener('click', handleProceed);
+      
+      // Bind regular modal events if not already bound
+      if (!this.modalEventsBound) {
+        this.bindModalEvents();
+        this.modalEventsBound = true;
+      }
+    });
   }
   
   updateYearEstimate() {
@@ -877,15 +1477,7 @@ class SpeciesExplorer {
       
       // Hide loading and initialize visualizations
       this.hideLoading();
-      this.initMap();
-      this.initTimeline();
-      this.initSeasonalWheel();
-      this.populateInsights();
-      this.initExplorer();
-      this.initScrollAnimations();
-      
-      // Animate counter
-      this.animateHeroCounter();
+      this.initVisualizations();
       
       // Update page title
       document.title = `${this.species.commonName || this.species.scientificName} | NBN Atlas Explorer`;
@@ -894,6 +1486,77 @@ class SpeciesExplorer {
       console.error('Failed to load data:', error);
       this.stopLoadingTimer();
       this.showError(error.message);
+    }
+  }
+  
+  // Initialize all visualizations
+  initVisualizations() {
+    this.initMap();
+    this.initTimeline();
+    this.initSeasonalWheel();
+    this.populateInsights();
+    this.initExplorer();
+    this.initScrollAnimations();
+    
+    // Animate counter
+    this.animateHeroCounter();
+    
+    // Add species legend if in compare mode
+    if (this.isCompareMode) {
+      this.addSpeciesLegend();
+    }
+    
+    // Update hero for comparison mode
+    this.updateHeroForCompare();
+  }
+  
+  // Add species legend for comparison mode
+  addSpeciesLegend() {
+    const heroSection = document.querySelector('.species-hero');
+    if (!heroSection) return;
+    
+    // Remove existing legend
+    const existingLegend = heroSection.querySelector('.species-legend');
+    if (existingLegend) existingLegend.remove();
+    
+    // Create legend
+    const legend = document.createElement('div');
+    legend.className = 'species-legend';
+    legend.innerHTML = this.selectedSpecies.map(sp => `
+      <div class="species-legend-item">
+        <span class="species-legend-dot" data-color="${sp.colorIndex}"></span>
+        <span>${sp.icon} ${sp.name}</span>
+      </div>
+    `).join('');
+    
+    // Insert after hero content
+    const heroContent = heroSection.querySelector('.hero-content');
+    if (heroContent) {
+      heroContent.insertAdjacentElement('afterend', legend);
+    }
+  }
+  
+  // Update hero section for comparison mode
+  updateHeroForCompare() {
+    if (!this.isCompareMode) return;
+    
+    const heroTitle = document.querySelector('.hero-title');
+    const heroSubtitle = document.querySelector('.hero-subtitle');
+    
+    if (heroTitle) {
+      const names = this.selectedSpecies.map(s => s.name);
+      if (names.length === 2) {
+        heroTitle.textContent = `Compare: ${names[0]} vs ${names[1]}`;
+      } else {
+        heroTitle.textContent = `Comparing ${names.length} Species`;
+      }
+    }
+    
+    if (heroSubtitle) {
+      const totalRecords = Object.values(this.speciesData).reduce(
+        (sum, sp) => sum + (sp.occurrences?.length || 0), 0
+      );
+      heroSubtitle.textContent = `${totalRecords.toLocaleString()} combined records from the NBN Atlas`;
     }
   }
   
@@ -1160,6 +1823,11 @@ class SpeciesExplorer {
     
     this.markersLayer = L.layerGroup().addTo(this.map);
     
+    // Add map legend for comparison mode
+    if (this.isCompareMode) {
+      this.addMapLegend();
+    }
+    
     // Year slider
     const yearSlider = document.getElementById('year-slider');
     const yearDisplay = document.getElementById('year-display');
@@ -1187,30 +1855,79 @@ class SpeciesExplorer {
     this.updateRegionStats();
   }
   
+  addMapLegend() {
+    // Remove existing legend
+    const existingLegend = document.querySelector('.map-legend');
+    if (existingLegend) existingLegend.remove();
+    
+    const mapWrapper = document.querySelector('.uk-map-wrapper');
+    if (!mapWrapper) return;
+    
+    const legend = document.createElement('div');
+    legend.className = 'map-legend';
+    legend.innerHTML = this.selectedSpecies.map(sp => {
+      const color = SPECIES_COLORS[(sp.colorIndex - 1) % SPECIES_COLORS.length];
+      return `<div class="map-legend-item">
+        <span class="map-legend-dot" style="background: ${color};"></span>
+        <span>${sp.icon} ${sp.name}</span>
+      </div>`;
+    }).join('');
+    
+    mapWrapper.appendChild(legend);
+  }
+  
   updateMapMarkers() {
     if (!this.markersLayer) return;
     
     this.markersLayer.clearLayers();
     
-    // Use filtered occurrences
-    const occurrences = this.getFilteredOccurrences();
-    
-    const icon = L.divIcon({
-      className: 'woodlark-marker',
-      html: '<div class="marker-dot"></div>',
-      iconSize: [10, 10],
-      iconAnchor: [5, 5]
-    });
-    
-    // Sample for performance
-    const sampleSize = Math.min(occurrences.length, 3000);
-    const step = Math.max(1, Math.floor(occurrences.length / sampleSize));
-    
-    for (let i = 0; i < occurrences.length; i += step) {
-      const occ = occurrences[i];
-      if (occ.decimalLatitude && occ.decimalLongitude) {
-        L.marker([occ.decimalLatitude, occ.decimalLongitude], { icon })
-          .addTo(this.markersLayer);
+    if (this.isCompareMode) {
+      // Comparison mode: different colored markers per species
+      this.selectedSpecies.forEach(sp => {
+        const occurrences = this.getFilteredOccurrences(sp.guid);
+        const color = SPECIES_COLORS[(sp.colorIndex - 1) % SPECIES_COLORS.length];
+        
+        const icon = L.divIcon({
+          className: 'species-marker',
+          html: `<div class="marker-dot" style="background-color: ${color};"></div>`,
+          iconSize: [10, 10],
+          iconAnchor: [5, 5]
+        });
+        
+        // Sample for performance
+        const sampleSize = Math.min(occurrences.length, 1500);
+        const step = Math.max(1, Math.floor(occurrences.length / sampleSize));
+        
+        for (let i = 0; i < occurrences.length; i += step) {
+          const occ = occurrences[i];
+          if (occ.decimalLatitude && occ.decimalLongitude) {
+            L.marker([occ.decimalLatitude, occ.decimalLongitude], { icon })
+              .bindPopup(`<strong>${sp.name}</strong><br>Year: ${occ.year || 'Unknown'}`)
+              .addTo(this.markersLayer);
+          }
+        }
+      });
+    } else {
+      // Single species mode
+      const occurrences = this.getFilteredOccurrences();
+      
+      const icon = L.divIcon({
+        className: 'woodlark-marker',
+        html: '<div class="marker-dot"></div>',
+        iconSize: [10, 10],
+        iconAnchor: [5, 5]
+      });
+      
+      // Sample for performance
+      const sampleSize = Math.min(occurrences.length, 3000);
+      const step = Math.max(1, Math.floor(occurrences.length / sampleSize));
+      
+      for (let i = 0; i < occurrences.length; i += step) {
+        const occ = occurrences[i];
+        if (occ.decimalLatitude && occ.decimalLongitude) {
+          L.marker([occ.decimalLatitude, occ.decimalLongitude], { icon })
+            .addTo(this.markersLayer);
+        }
       }
     }
   }
@@ -1219,7 +1936,12 @@ class SpeciesExplorer {
     const statsContainer = document.getElementById('region-stats');
     if (!statsContainer) return;
     
-    // Use filtered occurrences
+    if (this.isCompareMode) {
+      this.updateComparisonRegionStats(statsContainer);
+      return;
+    }
+    
+    // Single species mode - Use filtered occurrences
     const occurrences = this.getFilteredOccurrences();
     
     const regionCounts = {};
@@ -1245,6 +1967,66 @@ class SpeciesExplorer {
     `).join('');
   }
   
+  // Comparison region stats with grouped bars
+  updateComparisonRegionStats(statsContainer) {
+    // Calculate region counts per species
+    const speciesRegionData = this.selectedSpecies.map(sp => {
+      const spData = this.speciesData[sp.guid];
+      const regionCounts = {};
+      (spData?.occurrences || []).forEach(occ => {
+        const region = occ.stateProvince || 'Unknown';
+        regionCounts[region] = (regionCounts[region] || 0) + 1;
+      });
+      return { species: sp, regions: regionCounts };
+    });
+    
+    // Get top regions by combined counts
+    const combinedCounts = {};
+    speciesRegionData.forEach(sd => {
+      Object.entries(sd.regions).forEach(([region, count]) => {
+        combinedCounts[region] = (combinedCounts[region] || 0) + count;
+      });
+    });
+    
+    const topRegions = Object.entries(combinedCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([region]) => region);
+    
+    // Find max for scaling
+    const maxCount = Math.max(
+      ...speciesRegionData.flatMap(sd => 
+        topRegions.map(r => sd.regions[r] || 0)
+      ),
+      1
+    );
+    
+    // Build HTML with grouped bars
+    let html = '';
+    topRegions.forEach(region => {
+      html += `<div class="region-stat region-stat-compare">
+        <div class="region-name">${region}</div>
+        <div class="region-bars-group">`;
+      
+      speciesRegionData.forEach(sd => {
+        const count = sd.regions[region] || 0;
+        const width = (count / maxCount) * 100;
+        const color = SPECIES_COLORS[(sd.species.colorIndex - 1) % SPECIES_COLORS.length];
+        html += `<div class="region-bar-row">
+          <span class="region-bar-icon">${sd.species.icon}</span>
+          <div class="region-bar-container">
+            <div class="region-bar" style="width: ${width}%; background: ${color};"></div>
+          </div>
+          <span class="region-count">${count.toLocaleString()}</span>
+        </div>`;
+      });
+      
+      html += `</div></div>`;
+    });
+    
+    statsContainer.innerHTML = html;
+  }
+  
   // =========================================
   // Timeline
   // =========================================
@@ -1254,7 +2036,12 @@ class SpeciesExplorer {
     
     if (!trackContainer || this.years.length === 0) return;
     
-    // Compute year counts from filtered data when location filter is active
+    if (this.isCompareMode) {
+      this.initComparisonTimeline(trackContainer, decadesContainer);
+      return;
+    }
+    
+    // Single species mode: bar chart
     const filteredOccurrences = this.getFilteredOccurrences();
     const yearCountMap = {};
     filteredOccurrences.forEach(occ => {
@@ -1291,6 +2078,124 @@ class SpeciesExplorer {
     }
     
     // Tooltips
+    this.bindTimelineTooltips(trackContainer);
+  }
+  
+  // Comparison timeline with overlapping line charts
+  initComparisonTimeline(trackContainer, decadesContainer) {
+    // Get all years across all species
+    const allYears = new Set();
+    this.selectedSpecies.forEach(sp => {
+      const spData = this.speciesData[sp.guid];
+      if (spData) {
+        Object.keys(spData.yearData || {}).forEach(y => allYears.add(parseInt(y)));
+      }
+    });
+    
+    const years = Array.from(allYears).sort((a, b) => a - b);
+    if (years.length === 0) return;
+    
+    // Build data series for each species
+    const seriesData = this.selectedSpecies.map(sp => {
+      const spData = this.speciesData[sp.guid];
+      const yearCounts = {};
+      (spData?.occurrences || []).forEach(occ => {
+        if (occ.year) {
+          yearCounts[occ.year] = (yearCounts[occ.year] || 0) + 1;
+        }
+      });
+      return {
+        species: sp,
+        data: years.map(year => ({ year, count: yearCounts[year] || 0 }))
+      };
+    });
+    
+    // Find max for scaling
+    const maxCount = Math.max(
+      ...seriesData.flatMap(s => s.data.map(d => d.count)),
+      1
+    );
+    
+    // SVG dimensions
+    const width = trackContainer.offsetWidth || 800;
+    const height = trackContainer.offsetHeight || 200;
+    const padding = { top: 20, right: 20, bottom: 30, left: 50 };
+    const chartWidth = width - padding.left - padding.right;
+    const chartHeight = height - padding.top - padding.bottom;
+    
+    // Scales
+    const xScale = (year) => padding.left + ((year - years[0]) / (years[years.length - 1] - years[0])) * chartWidth;
+    const yScale = (count) => padding.top + chartHeight - (count / maxCount) * chartHeight;
+    
+    // Build SVG
+    let svg = `<svg class="timeline-chart" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet">`;
+    
+    // Grid lines
+    svg += `<g class="grid-lines" stroke="#d4a574" stroke-opacity="0.3">`;
+    for (let i = 0; i <= 4; i++) {
+      const y = padding.top + (chartHeight / 4) * i;
+      svg += `<line x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}"/>`;
+    }
+    svg += `</g>`;
+    
+    // Draw lines for each species
+    seriesData.forEach(series => {
+      const color = SPECIES_COLORS[(series.species.colorIndex - 1) % SPECIES_COLORS.length];
+      const points = series.data.map(d => `${xScale(d.year)},${yScale(d.count)}`).join(' ');
+      
+      svg += `<polyline 
+        class="timeline-line" 
+        points="${points}"
+        fill="none" 
+        stroke="${color}" 
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        data-species="${series.species.guid}"
+      />`;
+      
+      // Add subtle area fill
+      const areaPoints = `${xScale(years[0])},${yScale(0)} ${points} ${xScale(years[years.length - 1])},${yScale(0)}`;
+      svg += `<polygon 
+        points="${areaPoints}"
+        fill="${color}" 
+        fill-opacity="0.1"
+      />`;
+    });
+    
+    // X-axis labels (decades)
+    const decades = [...new Set(years.map(y => Math.floor(y / 10) * 10))];
+    svg += `<g class="x-axis" fill="var(--sepia-ink)" font-size="12" font-family="var(--font-data)">`;
+    decades.forEach(decade => {
+      const x = xScale(decade);
+      if (x >= padding.left && x <= width - padding.right) {
+        svg += `<text x="${x}" y="${height - 5}" text-anchor="middle">${decade}s</text>`;
+      }
+    });
+    svg += `</g>`;
+    
+    svg += `</svg>`;
+    
+    // Add legend
+    svg += `<div class="timeline-legend">`;
+    this.selectedSpecies.forEach(sp => {
+      const color = SPECIES_COLORS[(sp.colorIndex - 1) % SPECIES_COLORS.length];
+      svg += `<div class="timeline-legend-item">
+        <span class="legend-line" style="background: ${color};"></span>
+        <span>${sp.icon} ${sp.name}</span>
+      </div>`;
+    });
+    svg += `</div>`;
+    
+    trackContainer.innerHTML = svg;
+    
+    // Clear decades container for line chart mode
+    if (decadesContainer) {
+      decadesContainer.innerHTML = '';
+    }
+  }
+  
+  bindTimelineTooltips(trackContainer) {
     const tooltip = document.getElementById('timeline-tooltip');
     trackContainer.querySelectorAll('.timeline-bar').forEach(bar => {
       bar.addEventListener('mouseenter', (e) => {
@@ -1320,7 +2225,12 @@ class SpeciesExplorer {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     
-    // Compute month counts from filtered data
+    if (this.isCompareMode) {
+      this.initComparisonWheel(wheelContainer, months);
+      return;
+    }
+    
+    // Single species mode
     const filteredOccurrences = this.getFilteredOccurrences();
     const monthCountMap = {};
     filteredOccurrences.forEach(occ => {
@@ -1383,7 +2293,111 @@ class SpeciesExplorer {
     
     wheelContainer.innerHTML = svg;
     
-    // Season cards
+    this.updateSeasonCards(months.map((_, i) => monthCountMap[i + 1] || 0));
+  }
+  
+  // Comparison wheel with overlapping arcs
+  initComparisonWheel(wheelContainer, months) {
+    const size = 400;
+    const center = size / 2;
+    const baseOuterRadius = 180;
+    const innerRadius = 60;
+    
+    // Calculate month counts for each species
+    const speciesMonthData = this.selectedSpecies.map(sp => {
+      const spData = this.speciesData[sp.guid];
+      const monthCounts = {};
+      (spData?.occurrences || []).forEach(occ => {
+        if (occ.month) {
+          const monthNum = parseInt(occ.month);
+          monthCounts[monthNum] = (monthCounts[monthNum] || 0) + 1;
+        }
+      });
+      return {
+        species: sp,
+        counts: months.map((_, i) => monthCounts[i + 1] || 0)
+      };
+    });
+    
+    // Find global max for scaling
+    const maxCount = Math.max(
+      ...speciesMonthData.flatMap(sd => sd.counts),
+      1
+    );
+    
+    let svg = `<svg class="seasonal-wheel" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">`;
+    
+    // Draw arcs for each species (outer to inner so smaller ones are visible)
+    speciesMonthData.forEach((sd, speciesIdx) => {
+      const color = SPECIES_COLORS[(sd.species.colorIndex - 1) % SPECIES_COLORS.length];
+      const arcWidth = (baseOuterRadius - innerRadius) / this.selectedSpecies.length;
+      const arcInner = innerRadius + arcWidth * speciesIdx;
+      const arcOuter = arcInner + arcWidth - 2; // Small gap between arcs
+      
+      months.forEach((month, i) => {
+        const count = sd.counts[i];
+        const ratio = count / maxCount;
+        const segmentRadius = arcInner + (arcOuter - arcInner) * ratio;
+        
+        const startAngle = (i * 30 - 90) * Math.PI / 180;
+        const endAngle = ((i + 1) * 30 - 90) * Math.PI / 180;
+        
+        const x1 = center + arcInner * Math.cos(startAngle);
+        const y1 = center + arcInner * Math.sin(startAngle);
+        const x2 = center + segmentRadius * Math.cos(startAngle);
+        const y2 = center + segmentRadius * Math.sin(startAngle);
+        const x3 = center + segmentRadius * Math.cos(endAngle);
+        const y3 = center + segmentRadius * Math.sin(endAngle);
+        const x4 = center + arcInner * Math.cos(endAngle);
+        const y4 = center + arcInner * Math.sin(endAngle);
+        
+        svg += `
+          <path class="wheel-segment" 
+                d="M ${x1} ${y1} L ${x2} ${y2} A ${segmentRadius} ${segmentRadius} 0 0 1 ${x3} ${y3} L ${x4} ${y4} A ${arcInner} ${arcInner} 0 0 0 ${x1} ${y1} Z"
+                fill="${color}"
+                fill-opacity="${0.4 + ratio * 0.6}"
+                data-month="${month}" 
+                data-count="${count}"
+                data-species="${sd.species.name}">
+          </path>
+        `;
+      });
+    });
+    
+    // Month labels
+    months.forEach((month, i) => {
+      const labelAngle = ((i + 0.5) * 30 - 90) * Math.PI / 180;
+      const labelRadius = baseOuterRadius + 25;
+      const labelX = center + labelRadius * Math.cos(labelAngle);
+      const labelY = center + labelRadius * Math.sin(labelAngle);
+      
+      svg += `<text class="wheel-month-label" x="${labelX}" y="${labelY}" text-anchor="middle" dominant-baseline="middle">${month}</text>`;
+    });
+    
+    svg += `<circle class="wheel-center" cx="${center}" cy="${center}" r="${innerRadius - 5}"/>`;
+    svg += '</svg>';
+    
+    // Add legend
+    svg += `<div class="wheel-legend">`;
+    this.selectedSpecies.forEach(sp => {
+      const color = SPECIES_COLORS[(sp.colorIndex - 1) % SPECIES_COLORS.length];
+      svg += `<div class="wheel-legend-item">
+        <span class="wheel-legend-dot" style="background: ${color};"></span>
+        <span>${sp.icon} ${sp.name}</span>
+      </div>`;
+    });
+    svg += `</div>`;
+    
+    wheelContainer.innerHTML = svg;
+    
+    // Update season cards with combined data
+    const totalMonthCounts = months.map((_, i) => 
+      speciesMonthData.reduce((sum, sd) => sum + sd.counts[i], 0)
+    );
+    this.updateSeasonCards(totalMonthCounts);
+  }
+  
+  updateSeasonCards(monthCounts) {
     const seasons = [
       { name: 'Spring', months: 'March - May', indices: [2, 3, 4] },
       { name: 'Summer', months: 'June - August', indices: [5, 6, 7] },
@@ -1415,7 +2429,12 @@ class SpeciesExplorer {
     
     if (!grid) return;
     
-    // Use filtered occurrences
+    if (this.isCompareMode) {
+      this.populateComparisonInsights(grid, subtitle);
+      return;
+    }
+    
+    // Single species mode - Use filtered occurrences
     const filteredOccurrences = this.getFilteredOccurrences();
     const totalRecords = filteredOccurrences.length;
     
@@ -1538,6 +2557,180 @@ class SpeciesExplorer {
     `;
   }
   
+  // Comparison insights with per-species stats and correlation
+  populateComparisonInsights(grid, subtitle) {
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    
+    // Calculate stats per species
+    const speciesStats = this.selectedSpecies.map(sp => {
+      const spData = this.speciesData[sp.guid];
+      const occurrences = spData?.occurrences || [];
+      const total = occurrences.length;
+      
+      // Year data
+      const yearCounts = {};
+      const monthCounts = {};
+      const regionCounts = {};
+      
+      occurrences.forEach(occ => {
+        if (occ.year) yearCounts[occ.year] = (yearCounts[occ.year] || 0) + 1;
+        if (occ.month) {
+          const m = parseInt(occ.month);
+          monthCounts[m] = (monthCounts[m] || 0) + 1;
+        }
+        const r = occ.stateProvince || 'Unknown';
+        regionCounts[r] = (regionCounts[r] || 0) + 1;
+      });
+      
+      const years = Object.keys(yearCounts).map(Number).sort();
+      const peakYear = years.reduce((max, y) => yearCounts[y] > (yearCounts[max] || 0) ? y : max, years[0]);
+      const peakMonth = Object.entries(monthCounts).sort((a, b) => b[1] - a[1])[0];
+      const topRegion = Object.entries(regionCounts).filter(([r]) => r !== 'Unknown').sort((a, b) => b[1] - a[1])[0];
+      
+      const color = SPECIES_COLORS[(sp.colorIndex - 1) % SPECIES_COLORS.length];
+      
+      return {
+        species: sp,
+        color,
+        total,
+        yearCounts,
+        peakYear,
+        peakYearCount: yearCounts[peakYear] || 0,
+        peakMonth: peakMonth ? monthNames[parseInt(peakMonth[0]) - 1] : 'N/A',
+        topRegion: topRegion?.[0] || 'Unknown',
+        yearRange: years.length > 0 ? `${years[0]}-${years[years.length - 1]}` : 'N/A'
+      };
+    });
+    
+    // Calculate correlation (Pearson) between species across years
+    let correlationInfo = '';
+    if (this.selectedSpecies.length === 2) {
+      const [s1, s2] = speciesStats;
+      const allYears = new Set([
+        ...Object.keys(s1.yearCounts),
+        ...Object.keys(s2.yearCounts)
+      ]);
+      
+      const pairs = Array.from(allYears).map(y => [
+        s1.yearCounts[y] || 0,
+        s2.yearCounts[y] || 0
+      ]);
+      
+      const n = pairs.length;
+      const sumX = pairs.reduce((a, p) => a + p[0], 0);
+      const sumY = pairs.reduce((a, p) => a + p[1], 0);
+      const sumXY = pairs.reduce((a, p) => a + p[0] * p[1], 0);
+      const sumX2 = pairs.reduce((a, p) => a + p[0] ** 2, 0);
+      const sumY2 = pairs.reduce((a, p) => a + p[1] ** 2, 0);
+      
+      const num = n * sumXY - sumX * sumY;
+      const den = Math.sqrt((n * sumX2 - sumX ** 2) * (n * sumY2 - sumY ** 2));
+      const r = den > 0 ? (num / den).toFixed(2) : 'N/A';
+      
+      let corrLabel = 'No correlation';
+      if (r !== 'N/A') {
+        const rVal = parseFloat(r);
+        if (rVal > 0.7) corrLabel = 'Strong positive';
+        else if (rVal > 0.3) corrLabel = 'Moderate positive';
+        else if (rVal > -0.3) corrLabel = 'Weak';
+        else if (rVal > -0.7) corrLabel = 'Moderate negative';
+        else corrLabel = 'Strong negative';
+      }
+      
+      correlationInfo = `
+        <div class="insight-card insight-correlation">
+          <div class="insight-icon">🔗</div>
+          <div class="insight-value">${r}</div>
+          <div class="insight-label">${corrLabel} Correlation</div>
+          <p class="insight-detail">Pearson correlation of yearly trends between the two species.</p>
+        </div>
+      `;
+    }
+    
+    // Update subtitle
+    if (subtitle) {
+      const names = this.selectedSpecies.map(s => s.name).join(' & ');
+      subtitle.textContent = `Comparing ${this.selectedSpecies.length} species: ${names}`;
+    }
+    
+    // Build comparison cards showing per-species stats
+    let html = `
+      <div class="insight-card insight-compare-grid">
+        <div class="insight-icon">📊</div>
+        <div class="insight-label">Total Records</div>
+        <div class="compare-values">
+          ${speciesStats.map(s => `
+            <div class="compare-value-item">
+              <span class="compare-dot" style="background: ${s.color};"></span>
+              <span class="compare-name">${s.species.icon} ${s.species.name}</span>
+              <span class="compare-num">${s.total.toLocaleString()}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+      
+      <div class="insight-card insight-compare-grid">
+        <div class="insight-icon">🏆</div>
+        <div class="insight-label">Peak Year</div>
+        <div class="compare-values">
+          ${speciesStats.map(s => `
+            <div class="compare-value-item">
+              <span class="compare-dot" style="background: ${s.color};"></span>
+              <span class="compare-name">${s.species.icon}</span>
+              <span class="compare-num">${s.peakYear} (${s.peakYearCount.toLocaleString()})</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+      
+      <div class="insight-card insight-compare-grid">
+        <div class="insight-icon">📅</div>
+        <div class="insight-label">Peak Month</div>
+        <div class="compare-values">
+          ${speciesStats.map(s => `
+            <div class="compare-value-item">
+              <span class="compare-dot" style="background: ${s.color};"></span>
+              <span class="compare-name">${s.species.icon}</span>
+              <span class="compare-num">${s.peakMonth}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+      
+      <div class="insight-card insight-compare-grid">
+        <div class="insight-icon">📍</div>
+        <div class="insight-label">Top Region</div>
+        <div class="compare-values">
+          ${speciesStats.map(s => `
+            <div class="compare-value-item">
+              <span class="compare-dot" style="background: ${s.color};"></span>
+              <span class="compare-name">${s.species.icon}</span>
+              <span class="compare-num">${s.topRegion}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+      
+      <div class="insight-card insight-compare-grid">
+        <div class="insight-icon">📚</div>
+        <div class="insight-label">Data Range</div>
+        <div class="compare-values">
+          ${speciesStats.map(s => `
+            <div class="compare-value-item">
+              <span class="compare-dot" style="background: ${s.color};"></span>
+              <span class="compare-name">${s.species.icon}</span>
+              <span class="compare-num">${s.yearRange}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+      
+      ${correlationInfo}
+    `;
+    
+    grid.innerHTML = html;
+  }
+  
   // =========================================
   // Data Explorer
   // =========================================
@@ -1547,9 +2740,29 @@ class SpeciesExplorer {
     this.explorerSort = { key: 'year', dir: 'desc' };
     this.filteredData = [...this.getFilteredOccurrences()];
     
+    // Add species header column if in comparison mode
+    this.updateExplorerHeaders();
+    
     this.populateRegionFilter();
     this.bindExplorerEvents();
     this.updateExplorerTable();
+  }
+  
+  updateExplorerHeaders() {
+    const thead = document.querySelector('#data-table thead tr');
+    if (!thead) return;
+    
+    // Remove any existing species column
+    const existingSpeciesCol = thead.querySelector('[data-sort="species"]');
+    if (existingSpeciesCol) existingSpeciesCol.remove();
+    
+    if (this.isCompareMode) {
+      // Insert species column as first column
+      const speciesHeader = document.createElement('th');
+      speciesHeader.setAttribute('data-sort', 'species');
+      speciesHeader.innerHTML = 'Species <span class="sort-indicator"></span>';
+      thead.insertBefore(speciesHeader, thead.firstChild);
+    }
   }
   
   populateRegionFilter() {
@@ -1696,6 +2909,7 @@ class SpeciesExplorer {
         case 'lat': aVal = a.decimalLatitude || 0; bVal = b.decimalLatitude || 0; break;
         case 'lng': aVal = a.decimalLongitude || 0; bVal = b.decimalLongitude || 0; break;
         case 'basis': aVal = a.basisOfRecord || ''; bVal = b.basisOfRecord || ''; break;
+        case 'species': aVal = a._speciesName || ''; bVal = b._speciesName || ''; break;
         default: aVal = a[key] || ''; bVal = b[key] || '';
       }
       
@@ -1745,10 +2959,12 @@ class SpeciesExplorer {
     const monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
                         'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     
+    const colCount = this.isCompareMode ? 7 : 6;
+    
     if (pageData.length === 0) {
       tbody.innerHTML = `
         <tr>
-          <td colspan="6" class="data-table-empty">
+          <td colspan="${colCount}" class="data-table-empty">
             No records match your filter criteria
           </td>
         </tr>
@@ -1763,8 +2979,13 @@ class SpeciesExplorer {
       const lng = occ.decimalLongitude ? occ.decimalLongitude.toFixed(4) : '—';
       const basis = this.formatBasisOfRecord(occ.basisOfRecord);
       
+      const speciesCell = this.isCompareMode 
+        ? `<td class="species-cell">${occ._speciesIcon || ''} ${occ._speciesName || occ.vernacularName || '—'}</td>`
+        : '';
+      
       return `
         <tr>
+          ${speciesCell}
           <td>${occ.year || '—'}</td>
           <td>${monthName}</td>
           <td>${occ.stateProvince || '—'}</td>
@@ -1787,23 +3008,33 @@ class SpeciesExplorer {
       return;
     }
     
-    const headers = ['Year', 'Month', 'Region', 'Latitude', 'Longitude', 'Record Type', 'Scientific Name', 'Vernacular Name'];
+    // Add Species column at the start if in comparison mode
+    const headers = this.isCompareMode 
+      ? ['Species', 'Year', 'Month', 'Region', 'Latitude', 'Longitude', 'Record Type', 'Scientific Name', 'Vernacular Name']
+      : ['Year', 'Month', 'Region', 'Latitude', 'Longitude', 'Record Type', 'Scientific Name', 'Vernacular Name'];
     
     const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June', 
                         'July', 'August', 'September', 'October', 'November', 'December'];
     
     const rows = this.filteredData.map(occ => {
       const month = parseInt(occ.month);
-      return [
+      const baseRow = [
         occ.year || '',
         monthNames[month] || '',
         occ.stateProvince || '',
         occ.decimalLatitude || '',
         occ.decimalLongitude || '',
         occ.basisOfRecord || '',
-        occ.scientificName || this.species.scientificName,
-        occ.vernacularName || this.species.commonName
-      ].map(val => {
+        occ.scientificName || this.species?.scientificName || '',
+        occ.vernacularName || occ._speciesName || this.species?.commonName || ''
+      ];
+      
+      // Prepend species name if in comparison mode
+      if (this.isCompareMode) {
+        baseRow.unshift(occ._speciesName || '');
+      }
+      
+      return baseRow.map(val => {
         const str = String(val);
         if (str.includes(',') || str.includes('"') || str.includes('\n')) {
           return `"${str.replace(/"/g, '""')}"`;
@@ -1813,13 +3044,22 @@ class SpeciesExplorer {
     });
     
     const csvContent = [headers.join(','), ...rows].join('\n');
-    const speciesName = (this.species.commonName || this.species.scientificName).replace(/\s+/g, '-').toLowerCase();
+    
+    // Generate filename based on mode
+    let filename;
+    if (this.isCompareMode) {
+      const names = this.selectedSpecies.map(s => s.name).join('-vs-').replace(/\s+/g, '-').toLowerCase();
+      filename = `comparison-${names}-${new Date().toISOString().split('T')[0]}.csv`;
+    } else {
+      const speciesName = (this.species?.commonName || this.species?.scientificName || 'species').replace(/\s+/g, '-').toLowerCase();
+      filename = `${speciesName}-occurrences-${new Date().toISOString().split('T')[0]}.csv`;
+    }
     
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `${speciesName}-occurrences-${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', filename);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

@@ -163,28 +163,44 @@
         
         <!-- Search Box -->
         <div class="search-container">
-          <div class="search-box">
-            <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="11" cy="11" r="8"/>
-              <path d="M21 21l-4.35-4.35"/>
-            </svg>
-            <input 
-              type="text" 
-              id="species-search" 
-              class="search-input" 
-              placeholder="Search for any species... (e.g., Robin, Red Fox, Badger)"
-              autocomplete="off"
-            >
-            <button id="search-btn" class="search-btn">
-              <span>Search</span>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
-                <path d="M5 12h14M12 5l7 7-7 7"/>
-              </svg>
-            </button>
+          <!-- Species Search Rows -->
+          <div id="species-rows" class="species-rows">
+            <div class="species-row" data-row="0">
+              <div class="search-box">
+                <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="11" cy="11" r="8"/>
+                  <path d="M21 21l-4.35-4.35"/>
+                </svg>
+                <div class="species-pills" id="species-pills-0"></div>
+                <input 
+                  type="text" 
+                  id="species-search-0" 
+                  class="search-input species-search-input" 
+                  placeholder="Search for any species..."
+                  autocomplete="off"
+                  data-row="0"
+                >
+              </div>
+              <div id="search-results-0" class="search-results hidden"></div>
+            </div>
           </div>
           
-          <!-- Search Results -->
-          <div id="search-results" class="search-results hidden"></div>
+          <!-- Add Species Button -->
+          <button id="add-species-btn" class="add-species-btn" title="Add species to compare">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+              <line x1="12" y1="5" x2="12" y2="19"/>
+              <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            <span>Compare with another species</span>
+          </button>
+          
+          <!-- Explore Button -->
+          <button id="explore-btn" class="explore-btn" disabled>
+            <span>Explore</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+          </button>
         </div>
         
         <p class="landing-hint">Or explore a featured species:</p>
