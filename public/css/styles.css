@@ -436,6 +436,14 @@ section {
   height: 100%;
 }
 
+/* UK outline regions */
+.uk-region {
+  fill: var(--parchment-dark);
+  stroke: var(--burnt-sienna);
+  stroke-width: 1.5;
+  filter: drop-shadow(2px 3px 4px rgba(93, 78, 55, 0.2));
+}
+
 /* Map dots */
 .occurrence-dot {
   fill: var(--burnt-sienna);

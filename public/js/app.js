@@ -191,16 +191,27 @@ class WoodlarkApp {
     svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
     svg.setAttribute('class', 'uk-map-svg');
     
-    // Add simplified UK outline
-    const ukOutline = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    ukOutline.setAttribute('d', this.getUKOutlinePath());
-    ukOutline.setAttribute('fill', '#EDE6D6');
-    ukOutline.setAttribute('stroke', '#A0522D');
-    ukOutline.setAttribute('stroke-width', '2');
-    ukOutline.setAttribute('transform', `translate(20, 30) scale(0.35)`);
-    svg.appendChild(ukOutline);
+    // Add UK outline using geographic coordinates (simplified Great Britain + Ireland outline)
+    const ukCoords = this.getUKCoordinates();
     
-    // Create dots group
+    // Convert geographic coords to SVG path
+    ukCoords.forEach((region, idx) => {
+      const pathData = region.map((point, i) => {
+        const x = projectLng(point[1]);
+        const y = projectLat(point[0]);
+        return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`;
+      }).join(' ') + ' Z';
+      
+      const outline = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      outline.setAttribute('d', pathData);
+      outline.setAttribute('fill', '#EDE6D6');
+      outline.setAttribute('stroke', '#A0522D');
+      outline.setAttribute('stroke-width', '1.5');
+      outline.setAttribute('class', 'uk-region');
+      svg.appendChild(outline);
+    });
+    
+    // Create dots group (on top of the map)
     this.dotsGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     this.dotsGroup.setAttribute('class', 'occurrence-dots');
     svg.appendChild(this.dotsGroup);
@@ -287,37 +298,50 @@ class WoodlarkApp {
     `).join('');
   }
   
-  getUKOutlinePath() {
-    // Simplified UK outline path
-    return `M 280 850 
-      Q 250 800, 220 780 
-      Q 180 750, 200 700 
-      Q 180 650, 220 600 
-      Q 200 550, 250 500 
-      Q 220 450, 280 400 
-      Q 250 350, 300 300 
-      Q 280 250, 350 200 
-      Q 320 150, 400 100 
-      Q 450 80, 500 120 
-      Q 550 100, 600 150 
-      Q 650 120, 700 180 
-      Q 750 150, 800 220 
-      Q 850 200, 880 280 
-      Q 920 260, 920 350 
-      Q 950 380, 900 450 
-      Q 930 500, 880 550 
-      Q 900 600, 850 650 
-      Q 870 700, 820 750 
-      Q 850 800, 780 850 
-      Q 800 900, 720 920 
-      Q 750 960, 650 950 
-      Q 680 1000, 580 980 
-      Q 600 1030, 500 1000 
-      Q 520 1050, 420 1020 
-      Q 450 1060, 350 1040 
-      Q 380 1080, 300 1050 
-      Q 320 1000, 280 950 
-      Q 300 900, 280 850 Z`;
+  getUKCoordinates() {
+    // Simplified UK outline coordinates [lat, lng] - Great Britain main island
+    const greatBritain = [
+      // Start SW Cornwall, go clockwise
+      [50.07, -5.71], [50.15, -5.07], [50.37, -4.67], [50.55, -4.19], 
+      [50.35, -3.55], [50.60, -2.98], [50.72, -1.95], [50.77, -1.30],
+      [50.74, -0.77], [50.90, 0.25], [50.96, 0.97], [51.10, 1.35],
+      // East coast going north  
+      [51.38, 1.42], [51.75, 1.29], [51.88, 1.08], [52.08, 1.63],
+      [52.48, 1.76], [52.95, 1.47], [53.08, 0.34], [53.33, 0.08],
+      [53.75, -0.12], [54.09, -0.17], [54.50, -0.61], [54.65, -1.17],
+      [55.00, -1.42], [55.45, -1.55], [55.77, -1.82], [55.98, -2.03],
+      // Scottish east coast
+      [56.20, -2.52], [56.47, -2.95], [56.71, -2.48], [57.00, -2.07],
+      [57.42, -1.78], [57.69, -1.85], [58.00, -3.02], [58.44, -3.10],
+      [58.62, -3.55], [58.55, -4.43], [58.32, -4.80],
+      // North Scotland
+      [58.60, -4.98], [58.45, -5.10], [57.90, -5.20], [57.53, -5.63],
+      [57.27, -5.80], [57.00, -5.85], [56.73, -6.10], [56.50, -5.67],
+      // West Scotland  
+      [56.23, -5.50], [55.90, -5.38], [55.58, -4.85], [55.43, -4.90],
+      [55.00, -5.05], [54.70, -5.10], [54.50, -4.62], [54.22, -4.38],
+      // Irish Sea coast
+      [54.05, -4.50], [53.42, -4.35], [53.32, -4.55], [53.22, -4.12],
+      [53.10, -4.08], [52.90, -4.47], [52.60, -4.15], [52.27, -4.08],
+      [51.87, -4.95], [51.68, -5.03], [51.55, -4.22], [51.45, -3.20],
+      [51.38, -3.43], [51.20, -3.15],
+      // Bristol Channel & South Wales
+      [51.18, -4.20], [51.00, -4.18], [50.77, -3.60], [50.50, -3.52],
+      [50.35, -4.12], [50.23, -4.78], [50.07, -5.71]
+    ];
+    
+    // Ireland outline (simplified)
+    const ireland = [
+      [51.45, -10.00], [51.78, -10.20], [52.15, -10.35], [52.55, -9.90],
+      [53.05, -9.55], [53.32, -9.85], [53.52, -10.05], [53.85, -9.70],
+      [54.22, -10.02], [54.47, -8.42], [55.05, -8.10], [55.25, -7.42],
+      [55.38, -6.95], [55.20, -6.10], [54.95, -5.88], [54.65, -5.70],
+      [54.40, -5.95], [54.10, -6.35], [53.75, -6.10], [53.42, -6.05],
+      [53.20, -6.10], [52.95, -6.05], [52.55, -6.35], [52.15, -6.95],
+      [51.85, -7.55], [51.55, -8.55], [51.45, -9.50], [51.45, -10.00]
+    ];
+    
+    return [greatBritain, ireland];
   }
   
   // =========================================
