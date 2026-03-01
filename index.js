@@ -173,7 +173,7 @@ app.get('/api/species/:guid/occurrences/:year', async (req, res) => {
   try {
     const guid = req.params.guid;
     const year = req.params.year;
-    const maxRecords = parseInt(req.query.max) || 5000;
+    const maxRecords = req.query.max ? parseInt(req.query.max) : Infinity;
     
     let allOccurrences = [];
     const PAGE_SIZE = 1000;
