@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Song of the Woodlark | NBN Atlas Visualization</title>
+  <meta name="description" content="An interactive exploration of Woodlark (Lullula arborea) sightings across Britain, featuring 31,000+ occurrence records from the NBN Atlas.">
+  
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="css/styles.css">
+  
+  <!-- Favicon - Bird emoji -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐦</text></svg>">
+</head>
+<body>
+  <!-- Loading Overlay -->
+  <div id="loading-overlay" class="loading-overlay">
+    <svg class="loading-bird" viewBox="0 0 100 60" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="50" cy="35" rx="25" ry="15" fill="#8B4513"/>
+      <ellipse cx="45" cy="38" rx="12" ry="10" fill="#D4A574"/>
+      <circle cx="28" cy="28" r="12" fill="#A0522D"/>
+      <path d="M22 20 Q25 12, 30 18" stroke="#5D4E37" stroke-width="2" fill="none"/>
+      <path d="M18 26 Q28 24, 35 28" stroke="#F5E6D3" stroke-width="2" fill="none"/>
+      <circle cx="24" cy="26" r="3" fill="#2D4739"/>
+      <path d="M16 30 L10 32 L16 34 Z" fill="#DAA520"/>
+      <path d="M45 25 Q70 15, 85 30 Q70 35, 55 35 Z" fill="#6B4423"/>
+    </svg>
+    <p class="loading-text">Loading woodlark sightings...</p>
+  </div>
+
+  <!-- Flying Birds Layer -->
+  <div id="flying-birds" class="flying-birds"></div>
+  
+  <!-- Floating Particles -->
+  <div id="particles" class="particles-container"></div>
+
+  <!-- ========================================
+       HERO SECTION
+       ======================================== -->
+  <section class="hero">
+    <!-- Atmospheric sun -->
+    <div class="hero-sun"></div>
+    
+    <!-- Layered landscape -->
+    <div class="hero-landscape">
+      <svg class="landscape-layer landscape-back" viewBox="0 0 1440 320" preserveAspectRatio="none">
+        <path d="M0,224 C180,180 360,280 540,220 C720,160 900,260 1080,200 C1260,140 1350,200 1440,180 L1440,320 L0,320 Z"></path>
+      </svg>
+      <svg class="landscape-layer landscape-mid" viewBox="0 0 1440 320" preserveAspectRatio="none">
+        <path d="M0,256 C120,220 240,290 360,250 C480,210 600,280 720,240 C840,200 960,270 1080,230 C1200,190 1320,250 1440,220 L1440,320 L0,320 Z"></path>
+      </svg>
+      <svg class="landscape-layer landscape-front" viewBox="0 0 1440 320" preserveAspectRatio="none">
+        <path d="M0,288 C90,260 180,300 270,280 C360,260 450,295 540,275 C630,255 720,290 810,270 C900,250 990,285 1080,265 C1170,245 1260,280 1350,260 C1395,250 1420,270 1440,260 L1440,320 L0,320 Z"></path>
+      </svg>
+    </div>
+    
+    <!-- Content -->
+    <div class="hero-content fade-in">
+      <p class="hero-latin">Lullula arborea</p>
+      <h1 class="hero-title">The Woodlark</h1>
+      <p class="subtitle">A visual journey through Britain's heathland songbird</p>
+      
+      <div class="hero-counter">
+        <span id="total-counter" class="counter-number">0</span>
+        <span class="counter-label">Recorded Sightings</span>
+      </div>
+    </div>
+    
+    <!-- Scroll hint -->
+    <div class="scroll-hint">
+      <span>Explore the data</span>
+      <div class="scroll-arrow"></div>
+    </div>
+  </section>
+
+  <!-- Decorative divider -->
+  <div class="divider">
+    <div class="divider-line"></div>
+    <svg class="divider-bird" viewBox="0 0 40 40" fill="currentColor">
+      <path d="M20 8 Q25 5, 35 10 Q28 12, 20 12 Q12 12, 5 10 Q15 5, 20 8 Z"/>
+      <ellipse cx="20" cy="18" rx="8" ry="6"/>
+      <circle cx="14" cy="15" r="4"/>
+      <path d="M8 16 L4 17 L8 18 Z"/>
+    </svg>
+    <div class="divider-line"></div>
+  </div>
+
+  <!-- ========================================
+       MAP SECTION
+       ======================================== -->
+  <section id="map-section" class="map-section">
+    <div class="section-header fade-in">
+      <p class="section-number">I. Distribution</p>
+      <h2 class="section-title">Where They Sing</h2>
+      <p class="section-subtitle">
+        Explore woodlark sightings across Britain. Use the slider to travel through time 
+        and see how their distribution has changed over the decades.
+      </p>
+    </div>
+    
+    <div class="map-container">
+      <div class="uk-map-wrapper fade-in">
+        <div id="uk-map"></div>
+      </div>
+      
+      <div class="map-controls fade-in">
+        <div class="control-group">
+          <label class="control-label">Year</label>
+          <div class="year-slider-container">
+            <input type="range" id="year-slider" class="year-slider" min="0" max="100" value="100">
+            <div id="year-display" class="year-display">All Years</div>
+          </div>
+        </div>
+        
+        <div class="control-group">
+          <label class="control-label">Regional Breakdown</label>
+          <div id="region-stats" class="region-stats"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================
+       TIMELINE SECTION
+       ======================================== -->
+  <section id="timeline-section" class="timeline-section">
+    <div class="section-header fade-in">
+      <p class="section-number" style="color: var(--sky-pale);">II. Through Time</p>
+      <h2 class="section-title">The Story Unfolds</h2>
+      <p class="section-subtitle">
+        From the first atlas surveys in 1968 to today's citizen science records, 
+        witness the changing fortunes of Britain's woodlarks.
+      </p>
+    </div>
+    
+    <div class="timeline-container fade-in">
+      <div id="timeline-track" class="timeline-track"></div>
+      <div id="timeline-tooltip" class="timeline-tooltip"></div>
+      <div id="timeline-decades" class="timeline-decades"></div>
+    </div>
+  </section>
+
+  <!-- ========================================
+       SEASONAL WHEEL SECTION
+       ======================================== -->
+  <section id="seasonal-section" class="seasonal-section">
+    <div class="section-header fade-in">
+      <p class="section-number">III. Seasons</p>
+      <h2 class="section-title">A Year in Song</h2>
+      <p class="section-subtitle">
+        The woodlark's melodious song can be heard throughout the year, 
+        but peak sightings follow the rhythm of breeding season.
+      </p>
+    </div>
+    
+    <div class="seasonal-container">
+      <div class="wheel-wrapper fade-in">
+        <div id="seasonal-wheel"></div>
+      </div>
+      
+      <div class="seasonal-info fade-in">
+        <h3 class="seasonal-title">Seasonal Patterns</h3>
+        <div id="season-cards" class="stagger-children"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================
+       DATA SOURCES SECTION
+       ======================================== -->
+  <section id="sources-section" class="sources-section">
+    <div class="section-header fade-in">
+      <p class="section-number" style="color: var(--sky-pale);">IV. Data Partners</p>
+      <h2 class="section-title" style="color: var(--sunrise);">The Recorders</h2>
+      <p class="section-subtitle" style="color: var(--parchment);">
+        This visualization is made possible by dedicated naturalists and organizations 
+        who have recorded and shared their observations.
+      </p>
+    </div>
+    
+    <div id="data-sources" class="sources-grid stagger-children"></div>
+  </section>
+
+  <!-- ========================================
+       FOOTER
+       ======================================== -->
+  <footer class="footer">
+    <svg class="footer-bird" viewBox="0 0 100 60" fill="currentColor">
+      <ellipse cx="50" cy="35" rx="25" ry="15"/>
+      <ellipse cx="45" cy="38" rx="12" ry="10" fill="#F5E6D3"/>
+      <circle cx="28" cy="28" r="12"/>
+      <path d="M22 20 Q25 12, 30 18" stroke="currentColor" stroke-width="2" fill="none"/>
+      <path d="M45 25 Q70 15, 85 30 Q70 35, 55 35 Z" fill="#5D4E37"/>
+      <path d="M72 35 L95 30 L95 40 Z" fill="#5D4E37"/>
+    </svg>
+    
+    <p class="footer-text">
+      "The woodlark's song is one of the most beautiful sounds of Britain's heathlands — 
+      a continuous, fluty melody delivered in flight or from a prominent perch."
+    </p>
+    
+    <p class="footer-credits">
+      Data provided by the <a href="https://nbnatlas.org" target="_blank">NBN Atlas</a> · 
+      Visualization by NBN Atlas Viewer · 
+      Built with 🤍 for nature
+    </p>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="js/animations.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
