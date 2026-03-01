@@ -79,7 +79,7 @@ app.get('/api/species/:guid', async (req, res) => {
 app.get('/api/species/:guid/facets', async (req, res) => {
   try {
     const guid = encodeURIComponent(req.params.guid);
-    const url = `${RECORDS_API}/occurrences/search?q=lsid:${guid}&fq=-occurrence_status%3A%22absent%22&pageSize=0&facets=year,month,state_province&facet=true&flimit=200`;
+    const url = `${RECORDS_API}/occurrences/search?q=lsid:${guid}&fq=-occurrence_status%3A%22absent%22&pageSize=0&facets=year,month,stateProvince&facet=true&flimit=200`;
     
     const response = await fetch(url);
     const data = await response.json();
