@@ -168,8 +168,105 @@ app.get('/api/species/:guid/occurrences', async (req, res) => {
   }
 });
 
+// Recursive function to fetch records, drilling down time granularity if needed
+// Drills: year -> month -> day if hitting 5000 offset limit
+async function fetchRecordsRecursive(guid, timeFilters, maxRecords, onProgress = null) {
+  const PAGE_SIZE = 1000;
+  const MAX_OFFSET = 5000;
+  
+  // Build the filter query string
+  let fqParts = [`year:${timeFilters.year}`];
+  if (timeFilters.month) fqParts.push(`month:${timeFilters.month}`);
+  if (timeFilters.day) fqParts.push(`day:${timeFilters.day}`);
+  
+  const fqString = fqParts.map(f => `fq=${f}`).join('&');
+  
+  let allOccurrences = [];
+  let startIndex = 0;
+  let hitOffsetLimit = false;
+  
+  // Try to fetch with pagination
+  while (startIndex < MAX_OFFSET && allOccurrences.length < maxRecords) {
+    const url = `${RECORDS_API}/occurrences/search?q=lsid:${encodeURIComponent(guid)}&fq=-occurrence_status%3A%22absent%22&fq=${UK_IRELAND_FILTER}&${fqString}&pageSize=${PAGE_SIZE}&startIndex=${startIndex}`;
+    const response = await fetch(url);
+    const data = await response.json();
+    
+    if (!data.occurrences || data.occurrences.length === 0) break;
+    
+    const occurrences = data.occurrences.map(occ => ({
+      year: parseInt(occ.year),
+      month: occ.month,
+      decimalLatitude: occ.decimalLatitude,
+      decimalLongitude: occ.decimalLongitude,
+      stateProvince: occ.stateProvince,
+      basisOfRecord: occ.basisOfRecord,
+      scientificName: occ.scientificName,
+      vernacularName: occ.vernacularName
+    }));
+    
+    allOccurrences = allOccurrences.concat(occurrences);
+    startIndex += PAGE_SIZE;
+    
+    if (data.occurrences.length < PAGE_SIZE) break;
+    
+    // Check if we're about to hit the offset limit
+    if (startIndex >= MAX_OFFSET && data.totalRecords > MAX_OFFSET) {
+      hitOffsetLimit = true;
+      break;
+    }
+  }
+  
+  // If we hit the offset limit, drill down to finer granularity
+  if (hitOffsetLimit && allOccurrences.length < maxRecords) {
+    if (!timeFilters.month) {
+      // Drill down to months
+      allOccurrences = [];
+      const months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
+      
+      for (const month of months) {
+        if (allOccurrences.length >= maxRecords) break;
+        
+        const monthRecords = await fetchRecordsRecursive(
+          guid, 
+          { ...timeFilters, month }, 
+          maxRecords - allOccurrences.length,
+          onProgress
+        );
+        allOccurrences = allOccurrences.concat(monthRecords);
+        
+        if (onProgress) {
+          onProgress({ level: 'month', value: month, records: allOccurrences.length });
+        }
+      }
+    } else if (!timeFilters.day) {
+      // Drill down to days (1-31)
+      allOccurrences = [];
+      
+      for (let d = 1; d <= 31; d++) {
+        if (allOccurrences.length >= maxRecords) break;
+        
+        const day = d.toString().padStart(2, '0');
+        const dayRecords = await fetchRecordsRecursive(
+          guid, 
+          { ...timeFilters, day }, 
+          maxRecords - allOccurrences.length,
+          onProgress
+        );
+        allOccurrences = allOccurrences.concat(dayRecords);
+        
+        if (onProgress) {
+          onProgress({ level: 'day', value: day, records: allOccurrences.length });
+        }
+      }
+    }
+    // Can't drill further than day - API doesn't support hour filtering
+  }
+  
+  return allOccurrences;
+}
+
 // Fetch occurrences for a single year (for progress tracking)
-// Uses month-based sub-pagination to work around NBN Atlas 5000 offset limit
+// Uses recursive time drilling to work around NBN Atlas 5000 offset limit
 // Supports Server-Sent Events for real-time progress updates
 app.get('/api/species/:guid/occurrences/:year', async (req, res) => {
   try {
@@ -186,50 +283,25 @@ app.get('/api/species/:guid/occurrences/:year', async (req, res) => {
       res.flushHeaders();
     }
     
-    let allOccurrences = [];
-    const PAGE_SIZE = 1000;
-    const MAX_OFFSET = 5000; // NBN Atlas hard limit on offset pagination
-    
-    // Fetch by month to work around the 5000 offset limit per query
-    const months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
-    
-    for (let m = 0; m < months.length; m++) {
-      const month = months[m];
-      if (allOccurrences.length >= maxRecords) break;
-      
-      let startIndex = 0;
-      let monthRecords = 0;
-      
-      while (startIndex < MAX_OFFSET && allOccurrences.length < maxRecords) {
-        const url = `${RECORDS_API}/occurrences/search?q=lsid:${encodeURIComponent(guid)}&fq=-occurrence_status%3A%22absent%22&fq=${UK_IRELAND_FILTER}&fq=year:${year}&fq=month:${month}&pageSize=${PAGE_SIZE}&startIndex=${startIndex}`;
-        const response = await fetch(url);
-        const data = await response.json();
-        
-        if (!data.occurrences || data.occurrences.length === 0) break;
-        
-        const occurrences = data.occurrences.map(occ => ({
-          year: parseInt(occ.year),
-          month: occ.month,
-          decimalLatitude: occ.decimalLatitude,
-          decimalLongitude: occ.decimalLongitude,
-          stateProvince: occ.stateProvince,
-          basisOfRecord: occ.basisOfRecord,
-          scientificName: occ.scientificName,
-          vernacularName: occ.vernacularName
-        }));
-        
-        allOccurrences = allOccurrences.concat(occurrences);
-        monthRecords += occurrences.length;
-        startIndex += PAGE_SIZE;
-        
-        if (data.occurrences.length < PAGE_SIZE) break;
-      }
-      
-      // Send progress update after each month
-      if (stream) {
-        res.write(`data: ${JSON.stringify({ type: 'progress', month: m + 1, totalMonths: 12, records: allOccurrences.length })}\n\n`);
-      }
-    }
+    let lastProgressUpdate = Date.now();
+    const allOccurrences = await fetchRecordsRecursive(
+      guid,
+      { year },
+      maxRecords,
+      stream ? (progress) => {
+        // Throttle progress updates to avoid flooding
+        const now = Date.now();
+        if (now - lastProgressUpdate > 200) {
+          res.write(`data: ${JSON.stringify({ 
+            type: 'progress', 
+            level: progress.level, 
+            value: progress.value,
+            records: progress.records 
+          })}\n\n`);
+          lastProgressUpdate = now;
+        }
+      } : null
+    );
     
     if (stream) {
       // Send final data
@@ -244,7 +316,12 @@ app.get('/api/species/:guid/occurrences/:year', async (req, res) => {
     }
   } catch (error) {
     console.error('Error fetching year occurrences:', error);
-    res.status(500).json({ error: 'Failed to fetch year occurrences' });
+    if (req.query.stream === 'true') {
+      res.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`);
+      res.end();
+    } else {
+      res.status(500).json({ error: 'Failed to fetch year occurrences' });
+    }
   }
 });
 

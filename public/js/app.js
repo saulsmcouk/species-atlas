@@ -465,14 +465,23 @@ class SpeciesExplorer {
         const maxForYear = yearCounts[year];
         
         try {
-          // Use SSE for real-time month-by-month progress
-          const yearOccurrences = await this.fetchYearWithStreaming(year, maxForYear, (monthProgress) => {
-            // Update progress as each month completes
-            const currentYearRecords = monthProgress.records;
+          // Use SSE for real-time progress (drills down: month -> day if needed)
+          const yearOccurrences = await this.fetchYearWithStreaming(year, maxForYear, (progress) => {
+            // Update progress with current drill level
+            const currentYearRecords = progress.records;
             this.updateProgress(fetchedCount + currentYearRecords, totalToFetch);
+            
+            // Show drill level (month or day)
+            let levelText = '';
+            if (progress.level === 'month') {
+              levelText = `month ${progress.value}`;
+            } else if (progress.level === 'day') {
+              levelText = `day ${progress.value}`;
+            }
+            
             this.updateLoadingText(
               `Loading occurrence records...`, 
-              `Year ${year} - month ${monthProgress.month}/12 (year ${i + 1}/${years.length})`
+              `Year ${year}${levelText ? ' - ' + levelText : ''} (year ${i + 1}/${years.length})`
             );
           });
           
@@ -621,7 +630,7 @@ class SpeciesExplorer {
     this.years = Object.keys(this.yearData).map(Number).sort((a, b) => a - b);
   }
   
-  // Fetch year data with SSE streaming for month-by-month progress
+  // Fetch year data with SSE streaming for recursive progress (month -> day if needed)
   fetchYearWithStreaming(year, maxRecords, onProgress) {
     return new Promise((resolve, reject) => {
       const url = `/api/species/${encodeURIComponent(this.currentGuid)}/occurrences/${year}?max=${maxRecords}&stream=true`;
@@ -634,13 +643,16 @@ class SpeciesExplorer {
           const data = JSON.parse(event.data);
           
           if (data.type === 'progress') {
-            // Report progress for this month
-            onProgress({ month: data.month, totalMonths: data.totalMonths, records: data.records });
+            // Report progress with drill level (month/day)
+            onProgress({ level: data.level, value: data.value, records: data.records });
           } else if (data.type === 'complete') {
             // All done - close connection and resolve
             eventSource.close();
             occurrences = data.occurrences || [];
             resolve(occurrences);
+          } else if (data.type === 'error') {
+            eventSource.close();
+            reject(new Error(data.message));
           }
         } catch (err) {
           console.error('Error parsing SSE data:', err);

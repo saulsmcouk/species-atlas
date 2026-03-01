@@ -44,7 +44,7 @@ For species with >50,000 records, a modal appears letting users choose:
 2. Record limit (10k/25k/50k/100k from most recent years)
 3. Load all
 
-Data is fetched year-by-year, with month-based sub-pagination (up to 60,000 records per year possible).
+Data is fetched year-by-year with recursive time drilling (year → month → day) to bypass the 5000 offset limit.
 
 ## CSS Variables
 
@@ -87,7 +87,7 @@ All in `public/css/styles.css`. Major sections are commented with `/* ==========
 ## Gotchas
 
 1. **Bird SVGs face left** - When flying left-to-right, apply `scaleX(-1)` to flip
-2. **NBN Atlas API has 5000 offset limit** - The API won't return records past startIndex 5000. Server works around this by sub-paginating by month (up to 5000 per year-month combo = 60k/year max)
+2. **NBN Atlas API has 5000 offset limit** - The API won't return records past startIndex 5000. Server works around this by recursively drilling into finer time granularity: year → month → day (only when needed)
 3. **Year slider resets** - Call `showLanding()` resets slider to "All Years"
 4. **Modal events only bound once** - `this.modalEventsBound` flag prevents duplicate listeners
 5. **Facet field names** - Use `stateProvince` not `state_province` for NBN Atlas
