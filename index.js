@@ -170,11 +170,21 @@ app.get('/api/species/:guid/occurrences', async (req, res) => {
 
 // Fetch occurrences for a single year (for progress tracking)
 // Uses month-based sub-pagination to work around NBN Atlas 5000 offset limit
+// Supports Server-Sent Events for real-time progress updates
 app.get('/api/species/:guid/occurrences/:year', async (req, res) => {
   try {
     const guid = req.params.guid;
     const year = req.params.year;
     const maxRecords = req.query.max ? parseInt(req.query.max) : Infinity;
+    const stream = req.query.stream === 'true';
+    
+    if (stream) {
+      // Server-Sent Events mode
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.flushHeaders();
+    }
     
     let allOccurrences = [];
     const PAGE_SIZE = 1000;
@@ -183,10 +193,12 @@ app.get('/api/species/:guid/occurrences/:year', async (req, res) => {
     // Fetch by month to work around the 5000 offset limit per query
     const months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
     
-    for (const month of months) {
+    for (let m = 0; m < months.length; m++) {
+      const month = months[m];
       if (allOccurrences.length >= maxRecords) break;
       
       let startIndex = 0;
+      let monthRecords = 0;
       
       while (startIndex < MAX_OFFSET && allOccurrences.length < maxRecords) {
         const url = `${RECORDS_API}/occurrences/search?q=lsid:${encodeURIComponent(guid)}&fq=-occurrence_status%3A%22absent%22&fq=${UK_IRELAND_FILTER}&fq=year:${year}&fq=month:${month}&pageSize=${PAGE_SIZE}&startIndex=${startIndex}`;
@@ -207,17 +219,29 @@ app.get('/api/species/:guid/occurrences/:year', async (req, res) => {
         }));
         
         allOccurrences = allOccurrences.concat(occurrences);
+        monthRecords += occurrences.length;
         startIndex += PAGE_SIZE;
         
         if (data.occurrences.length < PAGE_SIZE) break;
       }
+      
+      // Send progress update after each month
+      if (stream) {
+        res.write(`data: ${JSON.stringify({ type: 'progress', month: m + 1, totalMonths: 12, records: allOccurrences.length })}\n\n`);
+      }
     }
     
-    res.json({
-      year: parseInt(year),
-      count: allOccurrences.length,
-      occurrences: allOccurrences
-    });
+    if (stream) {
+      // Send final data
+      res.write(`data: ${JSON.stringify({ type: 'complete', year: parseInt(year), count: allOccurrences.length, occurrences: allOccurrences })}\n\n`);
+      res.end();
+    } else {
+      res.json({
+        year: parseInt(year),
+        count: allOccurrences.length,
+        occurrences: allOccurrences
+      });
+    }
   } catch (error) {
     console.error('Error fetching year occurrences:', error);
     res.status(500).json({ error: 'Failed to fetch year occurrences' });

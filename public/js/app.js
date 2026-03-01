@@ -456,7 +456,7 @@ class SpeciesExplorer {
       this.updateLoadingText(`Loading ${totalToFetch.toLocaleString()} occurrence records...`, 
         `Fetching data from ${years.length} years`);
       
-      // Fetch year by year with progress
+      // Fetch year by year with streaming progress
       let allOccurrences = [];
       let fetchedCount = 0;
       
@@ -465,15 +465,21 @@ class SpeciesExplorer {
         const maxForYear = yearCounts[year];
         
         try {
-          const occRes = await fetch(`/api/species/${encodeURIComponent(this.currentGuid)}/occurrences/${year}?max=${maxForYear}`);
-          const occData = await occRes.json();
+          // Use SSE for real-time month-by-month progress
+          const yearOccurrences = await this.fetchYearWithStreaming(year, maxForYear, (monthProgress) => {
+            // Update progress as each month completes
+            const currentYearRecords = monthProgress.records;
+            this.updateProgress(fetchedCount + currentYearRecords, totalToFetch);
+            this.updateLoadingText(
+              `Loading occurrence records...`, 
+              `Year ${year} - month ${monthProgress.month}/12 (year ${i + 1}/${years.length})`
+            );
+          });
           
-          if (occData.occurrences) {
-            allOccurrences = allOccurrences.concat(occData.occurrences);
-            fetchedCount += occData.occurrences.length;
-          }
+          allOccurrences = allOccurrences.concat(yearOccurrences);
+          fetchedCount += yearOccurrences.length;
           
-          // Update progress
+          // Final update for year
           this.updateProgress(fetchedCount, totalToFetch);
           this.updateLoadingText(
             `Loading occurrence records...`, 
@@ -613,6 +619,44 @@ class SpeciesExplorer {
     });
     
     this.years = Object.keys(this.yearData).map(Number).sort((a, b) => a - b);
+  }
+  
+  // Fetch year data with SSE streaming for month-by-month progress
+  fetchYearWithStreaming(year, maxRecords, onProgress) {
+    return new Promise((resolve, reject) => {
+      const url = `/api/species/${encodeURIComponent(this.currentGuid)}/occurrences/${year}?max=${maxRecords}&stream=true`;
+      
+      const eventSource = new EventSource(url);
+      let occurrences = [];
+      
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          
+          if (data.type === 'progress') {
+            // Report progress for this month
+            onProgress({ month: data.month, totalMonths: data.totalMonths, records: data.records });
+          } else if (data.type === 'complete') {
+            // All done - close connection and resolve
+            eventSource.close();
+            occurrences = data.occurrences || [];
+            resolve(occurrences);
+          }
+        } catch (err) {
+          console.error('Error parsing SSE data:', err);
+        }
+      };
+      
+      eventSource.onerror = (err) => {
+        eventSource.close();
+        // Fallback to regular fetch if SSE fails
+        console.warn('SSE failed, falling back to regular fetch');
+        fetch(`/api/species/${encodeURIComponent(this.currentGuid)}/occurrences/${year}?max=${maxRecords}`)
+          .then(res => res.json())
+          .then(data => resolve(data.occurrences || []))
+          .catch(reject);
+      };
+    });
   }
   
   processFacets(facets) {
