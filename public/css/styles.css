@@ -480,6 +480,30 @@ section {
   border-radius: 50%;
 }
 
+/* Species occurrence markers */
+.species-marker,
+.woodlark-marker {
+  background: transparent;
+  border: none;
+}
+
+.species-marker .marker-dot,
+.woodlark-marker .marker-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--burnt-sienna);
+  border-radius: 50%;
+  box-shadow: 0 0 6px rgba(160, 82, 45, 0.6);
+  opacity: 0.85;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.species-marker:hover .marker-dot,
+.woodlark-marker:hover .marker-dot {
+  transform: scale(1.5);
+  opacity: 1;
+}
+
 .uk-map-svg {
   width: 100%;
   height: 100%;
