@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>The Song of the Woodlark | NBN Atlas Visualization</title>
-  <meta name="description" content="An interactive exploration of Woodlark (Lullula arborea) sightings across Britain, featuring 31,000+ occurrence records from the NBN Atlas.">
+  <title>NBN Atlas Species Explorer</title>
+  <meta name="description" content="Explore biodiversity data for any species in Britain with beautiful, interactive visualizations powered by NBN Atlas.">
   
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
@@ -13,11 +13,11 @@
   <link rel="stylesheet" href="css/styles.css">
   
   <!-- Favicon - Bird emoji -->
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐦</text></svg>">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦋</text></svg>">
 </head>
 <body>
   <!-- Loading Overlay -->
-  <div id="loading-overlay" class="loading-overlay">
+  <div id="loading-overlay" class="loading-overlay hidden">
     <svg class="loading-bird" viewBox="0 0 100 60" xmlns="http://www.w3.org/2000/svg">
       <ellipse cx="50" cy="35" rx="25" ry="15" fill="#8B4513"/>
       <ellipse cx="45" cy="38" rx="12" ry="10" fill="#D4A574"/>
@@ -28,7 +28,8 @@
       <path d="M16 30 L10 32 L16 34 Z" fill="#DAA520"/>
       <path d="M45 25 Q70 15, 85 30 Q70 35, 55 35 Z" fill="#6B4423"/>
     </svg>
-    <p class="loading-text">Loading woodlark sightings...</p>
+    <p class="loading-text" id="loading-text">Loading species data...</p>
+    <p class="loading-subtext" id="loading-subtext"></p>
   </div>
 
   <!-- Flying Birds Layer -->
@@ -38,16 +39,139 @@
   <div id="particles" class="particles-container"></div>
 
   <!-- ========================================
-       HERO SECTION
+       LANDING PAGE (Species Search)
        ======================================== -->
-  <section class="hero">
-    <!-- Atmospheric sun -->
-    <div class="hero-sun"></div>
+  <div id="landing-view" class="landing-view">
+    <section class="landing-hero">
+      <!-- Atmospheric sun -->
+      <div class="hero-sun"></div>
+      
+      <!-- Layered landscape -->
+      <div class="hero-landscape">
+        <svg class="landscape-layer landscape-back" viewBox="0 0 1440 320" preserveAspectRatio="none">
+          <path d="M0,224 C180,180 360,280 540,220 C720,160 900,260 1080,200 C1260,140 1350,200 1440,180 L1440,320 L0,320 Z"></path>
+        </svg>
+        <svg class="landscape-layer landscape-mid" viewBox="0 0 1440 320" preserveAspectRatio="none">
+          <path d="M0,256 C120,220 240,290 360,250 C480,210 600,280 720,240 C840,200 960,270 1080,230 C1200,190 1320,250 1440,220 L1440,320 L0,320 Z"></path>
+        </svg>
+        <svg class="landscape-layer landscape-front" viewBox="0 0 1440 320" preserveAspectRatio="none">
+          <path d="M0,288 C90,260 180,300 270,280 C360,260 450,295 540,275 C630,255 720,290 810,270 C900,250 990,285 1080,265 C1170,245 1260,280 1350,260 C1395,250 1420,270 1440,260 L1440,320 L0,320 Z"></path>
+        </svg>
+      </div>
+      
+      <!-- Content -->
+      <div class="landing-content fade-in">
+        <p class="landing-tagline">Explore Britain's Biodiversity</p>
+        <h1 class="landing-title">Species Atlas</h1>
+        <p class="landing-subtitle">Beautiful, interactive visualizations of wildlife occurrence data from the NBN Atlas</p>
+        
+        <!-- Search Box -->
+        <div class="search-container">
+          <div class="search-box">
+            <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/>
+              <path d="M21 21l-4.35-4.35"/>
+            </svg>
+            <input 
+              type="text" 
+              id="species-search" 
+              class="search-input" 
+              placeholder="Search for any species... (e.g., Robin, Red Fox, Bluebell)"
+              autocomplete="off"
+            >
+            <button id="search-btn" class="search-btn">
+              <span>Search</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                <path d="M5 12h14M12 5l7 7-7 7"/>
+              </svg>
+            </button>
+          </div>
+          
+          <!-- Search Results -->
+          <div id="search-results" class="search-results hidden"></div>
+        </div>
+        
+        <p class="landing-hint">Or explore a featured species:</p>
+        
+        <div class="featured-species">
+          <button class="featured-btn" data-guid="NHMSYS0000530739">
+            <span class="featured-icon">🐦</span>
+            <span class="featured-name">Robin</span>
+          </button>
+          <button class="featured-btn" data-guid="NHMSYS0000080188">
+            <span class="featured-icon">🦊</span>
+            <span class="featured-name">Red Fox</span>
+          </button>
+          <button class="featured-btn" data-guid="NHMSYS0000455772">
+            <span class="featured-icon">🌸</span>
+            <span class="featured-name">Bluebell</span>
+          </button>
+          <button class="featured-btn" data-guid="NHMSYS0021125602" data-prefetch="true">
+            <span class="featured-icon">🎵</span>
+            <span class="featured-name">Woodlark</span>
+          </button>
+        </div>
+      </div>
+      
+      <!-- Scroll hint -->
+      <div class="scroll-hint">
+        <span>Discover more</span>
+        <div class="scroll-arrow"></div>
+      </div>
+    </section>
     
-    <!-- Layered landscape -->
-    <div class="hero-landscape">
-      <svg class="landscape-layer landscape-back" viewBox="0 0 1440 320" preserveAspectRatio="none">
-        <path d="M0,224 C180,180 360,280 540,220 C720,160 900,260 1080,200 C1260,140 1350,200 1440,180 L1440,320 L0,320 Z"></path>
+    <!-- About Section -->
+    <section class="landing-about">
+      <div class="about-content fade-in">
+        <h2>How It Works</h2>
+        <div class="about-steps">
+          <div class="about-step">
+            <div class="step-number">1</div>
+            <h3>Search</h3>
+            <p>Enter any species name — common or scientific — and browse matching results from the NBN Atlas database.</p>
+          </div>
+          <div class="about-step">
+            <div class="step-number">2</div>
+            <h3>Explore</h3>
+            <p>View interactive maps, timelines, and seasonal patterns built from thousands of real occurrence records.</p>
+          </div>
+          <div class="about-step">
+            <div class="step-number">3</div>
+            <h3>Export</h3>
+            <p>Filter the data, generate insights, and download CSV files for your own research and analysis.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+    
+    <!-- Footer for Landing -->
+    <footer class="landing-footer">
+      <p>Powered by data from the <a href="https://nbnatlas.org" target="_blank">NBN Atlas</a></p>
+    </footer>
+  </div>
+
+  <!-- ========================================
+       VISUALIZATION VIEW (Species Details)
+       ======================================== -->
+  <div id="visualization-view" class="visualization-view hidden">
+    
+    <!-- Back to Search Button -->
+    <a href="#" id="back-to-search" class="back-link">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+        <path d="M19 12H5M12 19l-7-7 7-7"/>
+      </svg>
+      <span>New Search</span>
+    </a>
+    
+    <!-- HERO SECTION -->
+    <section class="hero">
+      <!-- Atmospheric sun -->
+      <div class="hero-sun"></div>
+      
+      <!-- Layered landscape -->
+      <div class="hero-landscape">
+        <svg class="landscape-layer landscape-back" viewBox="0 0 1440 320" preserveAspectRatio="none">
+          <path d="M0,224 C180,180 360,280 540,220 C720,160 900,260 1080,200 C1260,140 1350,200 1440,180 L1440,320 L0,320 Z"></path>
       </svg>
       <svg class="landscape-layer landscape-mid" viewBox="0 0 1440 320" preserveAspectRatio="none">
         <path d="M0,256 C120,220 240,290 360,250 C480,210 600,280 720,240 C840,200 960,270 1080,230 C1200,190 1320,250 1440,220 L1440,320 L0,320 Z"></path>
@@ -59,9 +183,9 @@
     
     <!-- Content -->
     <div class="hero-content fade-in">
-      <p class="hero-latin">Lullula arborea</p>
-      <h1 class="hero-title">The Woodlark</h1>
-      <p class="subtitle">A visual journey through Britain's heathland songbird</p>
+      <p class="hero-latin" id="species-scientific"></p>
+      <h1 class="hero-title" id="species-common">Loading...</h1>
+      <p class="subtitle" id="species-subtitle">Exploring occurrence records across Britain</p>
       
       <div class="hero-counter">
         <span id="total-counter" class="counter-number">0</span>
@@ -175,67 +299,13 @@
     <div class="section-header fade-in">
       <p class="section-number">IV. Discoveries</p>
       <h2 class="section-title">What The Data Reveals</h2>
-      <p class="section-subtitle">
-        Key findings from analyzing 76 years of woodlark observations across Britain.
+      <p class="section-subtitle" id="insights-subtitle">
+        Key findings from analyzing occurrence records across Britain.
       </p>
     </div>
     
-    <div class="insights-grid stagger-children">
-      <div class="insight-card insight-trend">
-        <div class="insight-icon">📈</div>
-        <div class="insight-value" id="insight-trend">+27%</div>
-        <div class="insight-label">Growth in 2020s vs 2010s</div>
-        <p class="insight-detail">Sighting reports show a sustained recovery, continuing the positive trend from the previous decade.</p>
-      </div>
-      
-      <div class="insight-card insight-breeding">
-        <div class="insight-icon">🥚</div>
-        <div class="insight-value" id="insight-breeding">63%</div>
-        <div class="insight-label">During Breeding Season</div>
-        <p class="insight-detail">The majority of woodlark sightings occur March through July when males perform their distinctive song flights.</p>
-      </div>
-      
-      <div class="insight-card insight-hotspot">
-        <div class="insight-icon">📍</div>
-        <div class="insight-value">Surrey</div>
-        <div class="insight-label">Top Hotspot Region</div>
-        <p class="insight-detail">The heathlands around Thursley Common and the North Downs hold Britain's highest concentration of woodlarks.</p>
-      </div>
-      
-      <div class="insight-card insight-peak">
-        <div class="insight-icon">🏆</div>
-        <div class="insight-value" id="insight-peak">2006</div>
-        <div class="insight-label">Peak Recording Year</div>
-        <p class="insight-detail">The highest single-year count in the dataset, reflecting both population recovery and increased survey effort.</p>
-      </div>
-      
-      <div class="insight-card insight-span">
-        <div class="insight-icon">📚</div>
-        <div class="insight-value">119 Years</div>
-        <div class="insight-label">Of Data (1905-2024)</div>
-        <p class="insight-detail">This extraordinary time-series enables us to trace the woodlark's journey from near-extinction to recovery.</p>
-      </div>
-      
-      <div class="insight-card insight-range">
-        <div class="insight-icon">🗺️</div>
-        <div class="insight-value">3 Regions</div>
-        <div class="insight-label">Main Strongholds</div>
-        <p class="insight-detail">Suffolk Brecks, Surrey heaths, and the New Forest comprise the species' core breeding range in Britain.</p>
-      </div>
-    </div>
-    
-    <div class="insight-story fade-in">
-      <h3>The Woodlark's Comeback</h3>
-      <p>
-        Once reduced to fewer than 200 pairs in the 1980s, the woodlark has staged a remarkable recovery. 
-        This gentle heathland specialist, with its delicate song that seems to float from the sky, 
-        has benefited greatly from heathland restoration projects across southern England.
-      </p>
-      <p>
-        The data tells a story of hope: decade-by-decade growth, expanding breeding range, 
-        and a species stepping back from the brink. Yet challenges remain — woodlarks depend on 
-        actively managed heathland, making continued conservation efforts vital.
-      </p>
+    <div class="insights-grid stagger-children" id="insights-grid">
+      <!-- Dynamically populated by JavaScript -->
     </div>
   </section>
 
@@ -246,8 +316,8 @@
     <div class="section-header fade-in">
       <p class="section-number">V. Explorer</p>
       <h2 class="section-title">Dive Into The Data</h2>
-      <p class="section-subtitle">
-        Filter, explore, and export woodlark occurrence records to generate your own insights.
+      <p class="section-subtitle" id="explorer-subtitle">
+        Filter, explore, and export occurrence records to generate your own insights.
       </p>
     </div>
     
@@ -377,9 +447,8 @@
       <path d="M72 35 L95 30 L95 40 Z" fill="#5D4E37"/>
     </svg>
     
-    <p class="footer-text">
-      "The woodlark's song is one of the most beautiful sounds of Britain's heathlands — 
-      a continuous, fluty melody delivered in flight or from a prominent perch."
+    <p class="footer-text" id="footer-quote">
+      Explore the rich biodiversity of Britain through interactive data visualization.
     </p>
     
     <p class="footer-credits">
@@ -388,6 +457,8 @@
       Built with 🤍 for nature
     </p>
   </footer>
+
+  </div><!-- End visualization-view -->
 
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>

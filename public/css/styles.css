@@ -1456,6 +1456,393 @@ section {
 }
 
 /* ==========================================================================
+   Landing Page Styles
+   ========================================================================== */
+
+/* View containers */
+.landing-view,
+.visualization-view {
+  width: 100%;
+}
+
+.landing-view.hidden,
+.visualization-view.hidden {
+  display: none;
+}
+
+/* Landing Hero */
+.landing-hero {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: linear-gradient(180deg, #B8D4E3 0%, #F8F4EB 100%);
+  overflow: hidden;
+  padding: var(--space-lg);
+}
+
+.landing-content {
+  position: relative;
+  z-index: 10;
+  text-align: center;
+  max-width: 800px;
+  padding: var(--space-lg) var(--space-md);
+}
+
+.landing-tagline {
+  font-family: var(--font-body);
+  font-size: 1.1rem;
+  color: var(--sepia-light);
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  margin-bottom: var(--space-xs);
+}
+
+.landing-title {
+  font-family: var(--font-display);
+  font-size: clamp(3rem, 8vw, 6rem);
+  font-weight: 700;
+  color: var(--sepia-ink);
+  margin-bottom: var(--space-sm);
+  line-height: 1.1;
+}
+
+.landing-subtitle {
+  font-family: var(--font-body);
+  font-size: 1.35rem;
+  color: var(--sepia-light);
+  max-width: 600px;
+  margin: 0 auto var(--space-lg);
+  line-height: 1.6;
+}
+
+/* Search Box */
+.search-container {
+  position: relative;
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto var(--space-md);
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  background: var(--parchment);
+  border: 2px solid var(--golden-amber);
+  border-radius: 50px;
+  padding: var(--space-xs);
+  box-shadow: 0 8px 32px rgba(93, 78, 55, 0.15);
+  transition: all 0.3s ease;
+}
+
+.search-box:focus-within {
+  border-color: var(--burnt-sienna);
+  box-shadow: 0 12px 48px rgba(160, 82, 45, 0.2);
+}
+
+.search-icon {
+  width: 24px;
+  height: 24px;
+  margin-left: var(--space-sm);
+  color: var(--sepia-light);
+  flex-shrink: 0;
+}
+
+.search-input {
+  flex: 1;
+  padding: var(--space-sm) var(--space-sm);
+  font-family: var(--font-body);
+  font-size: 1.1rem;
+  color: var(--sepia-ink);
+  background: transparent;
+  border: none;
+  outline: none;
+}
+
+.search-input::placeholder {
+  color: var(--sepia-light);
+  opacity: 0.7;
+}
+
+.search-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md);
+  font-family: var(--font-body);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--parchment);
+  background: var(--burnt-sienna);
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.search-btn:hover {
+  background: var(--heathland);
+  transform: translateX(2px);
+}
+
+/* Search Results Dropdown */
+.search-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: var(--space-xs);
+  background: var(--parchment);
+  border: 1px solid var(--golden-amber);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(93, 78, 55, 0.2);
+  max-height: 400px;
+  overflow-y: auto;
+  z-index: 100;
+}
+
+.search-results.hidden {
+  display: none;
+}
+
+.search-result-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  cursor: pointer;
+  transition: background 0.15s ease;
+  border-bottom: 1px solid var(--sepia-faded);
+}
+
+.search-result-item:last-child {
+  border-bottom: none;
+}
+
+.search-result-item:hover {
+  background: rgba(212, 165, 116, 0.15);
+}
+
+.result-image {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--parchment-dark);
+}
+
+.result-image-placeholder {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  background: var(--parchment-dark);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+}
+
+.result-info {
+  flex: 1;
+  text-align: left;
+}
+
+.result-common {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  color: var(--sepia-ink);
+  margin-bottom: 2px;
+}
+
+.result-scientific {
+  font-family: var(--font-body);
+  font-style: italic;
+  font-size: 0.9rem;
+  color: var(--sepia-light);
+}
+
+.result-count {
+  font-family: var(--font-data);
+  font-size: 0.8rem;
+  color: var(--burnt-sienna);
+  background: rgba(160, 82, 45, 0.1);
+  padding: 4px 10px;
+  border-radius: 20px;
+}
+
+.search-loading,
+.search-no-results {
+  padding: var(--space-md);
+  text-align: center;
+  color: var(--sepia-light);
+  font-style: italic;
+}
+
+/* Featured Species */
+.landing-hint {
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  color: var(--sepia-light);
+  margin-bottom: var(--space-sm);
+}
+
+.featured-species {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  justify-content: center;
+}
+
+.featured-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-md);
+  font-family: var(--font-body);
+  font-size: 1rem;
+  color: var(--sepia-ink);
+  background: var(--parchment);
+  border: 1px solid var(--golden-amber);
+  border-radius: 25px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.featured-btn:hover {
+  background: var(--golden-amber);
+  border-color: var(--burnt-sienna);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(160, 82, 45, 0.2);
+}
+
+.featured-icon {
+  font-size: 1.2rem;
+}
+
+.featured-name {
+  font-weight: 500;
+}
+
+/* About Section */
+.landing-about {
+  background: var(--parchment);
+  padding: var(--space-xl) var(--space-md);
+}
+
+.about-content {
+  max-width: 1000px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.about-content h2 {
+  font-family: var(--font-display);
+  font-size: 2.5rem;
+  color: var(--sepia-ink);
+  margin-bottom: var(--space-lg);
+}
+
+.about-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: var(--space-lg);
+}
+
+.about-step {
+  text-align: center;
+}
+
+.step-number {
+  width: 60px;
+  height: 60px;
+  margin: 0 auto var(--space-sm);
+  background: var(--burnt-sienna);
+  color: var(--parchment);
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 700;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.about-step h3 {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  color: var(--sepia-ink);
+  margin-bottom: var(--space-xs);
+}
+
+.about-step p {
+  font-family: var(--font-body);
+  color: var(--sepia-light);
+  line-height: 1.6;
+}
+
+/* Landing Footer */
+.landing-footer {
+  background: var(--parchment-dark);
+  padding: var(--space-md);
+  text-align: center;
+}
+
+.landing-footer p {
+  font-family: var(--font-body);
+  color: var(--sepia-light);
+}
+
+.landing-footer a {
+  color: var(--burnt-sienna);
+  text-decoration: none;
+}
+
+.landing-footer a:hover {
+  text-decoration: underline;
+}
+
+/* Back Link */
+.back-link {
+  position: fixed;
+  top: var(--space-md);
+  left: var(--space-md);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-md);
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  color: var(--sepia-ink);
+  background: rgba(248, 244, 235, 0.95);
+  border: 1px solid var(--golden-amber);
+  border-radius: 25px;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(8px);
+}
+
+.back-link:hover {
+  background: var(--golden-amber);
+  transform: translateX(-2px);
+}
+
+/* Loading subtext */
+.loading-subtext {
+  font-family: var(--font-data);
+  font-size: 0.85rem;
+  color: var(--sepia-light);
+  margin-top: var(--space-xs);
+}
+
+/* Sepia faded (missing variable) */
+:root {
+  --sepia-faded: rgba(139, 115, 85, 0.2);
+}
+
+/* ==========================================================================
    Responsive Adjustments
    ========================================================================== */
 @media (max-width: 768px) {
@@ -1469,5 +1856,22 @@ section {
   
   .timeline-track {
     height: 200px;
+  }
+  
+  .landing-title {
+    font-size: 2.5rem;
+  }
+  
+  .search-btn span {
+    display: none;
+  }
+  
+  .featured-species {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .back-link span {
+    display: none;
   }
 }

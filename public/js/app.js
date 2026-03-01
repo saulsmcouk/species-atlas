@@ -1,130 +1,446 @@
 /**
- * The Song of the Woodlark - Main Application
- * Interactive data visualization for NBN Atlas Woodlark occurrences
+ * NBN Atlas Species Explorer
+ * Interactive data visualization for any species from NBN Atlas
  */
 
-class WoodlarkApp {
+class SpeciesExplorer {
   constructor() {
+    this.species = null;
     this.data = null;
-    this.summary = null;
     this.yearData = {};
     this.monthData = {};
     this.regionData = {};
     this.currentYear = 'all';
+    this.map = null;
+    this.markersLayer = null;
     
     this.init();
   }
   
-  async init() {
+  init() {
+    this.bindLandingEvents();
+    this.initAnimations();
+    this.handleRouting();
+  }
+  
+  // =========================================
+  // SPA Routing
+  // =========================================
+  handleRouting() {
+    const hash = window.location.hash;
+    
+    if (hash.startsWith('#/species/')) {
+      const guid = hash.replace('#/species/', '');
+      this.loadSpecies(guid);
+    } else {
+      this.showLanding();
+    }
+    
+    // Handle browser back/forward
+    window.addEventListener('hashchange', () => {
+      const newHash = window.location.hash;
+      if (newHash.startsWith('#/species/')) {
+        const guid = newHash.replace('#/species/', '');
+        this.loadSpecies(guid);
+      } else {
+        this.showLanding();
+      }
+    });
+  }
+  
+  showLanding() {
+    document.getElementById('landing-view').classList.remove('hidden');
+    document.getElementById('visualization-view').classList.add('hidden');
+    document.getElementById('loading-overlay').classList.add('hidden');
+    document.title = 'NBN Atlas Species Explorer';
+  }
+  
+  showVisualization() {
+    document.getElementById('landing-view').classList.add('hidden');
+    document.getElementById('visualization-view').classList.remove('hidden');
+  }
+  
+  // =========================================
+  // Landing Page Events
+  // =========================================
+  bindLandingEvents() {
+    const searchInput = document.getElementById('species-search');
+    const searchBtn = document.getElementById('search-btn');
+    const searchResults = document.getElementById('search-results');
+    const backLink = document.getElementById('back-to-search');
+    
+    let searchTimeout = null;
+    
+    // Search input with debounce
+    if (searchInput) {
+      searchInput.addEventListener('input', () => {
+        clearTimeout(searchTimeout);
+        const query = searchInput.value.trim();
+        
+        if (query.length < 2) {
+          searchResults.classList.add('hidden');
+          return;
+        }
+        
+        searchTimeout = setTimeout(() => {
+          this.searchSpecies(query);
+        }, 300);
+      });
+      
+      searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          clearTimeout(searchTimeout);
+          const query = searchInput.value.trim();
+          if (query.length >= 2) {
+            this.searchSpecies(query);
+          }
+        }
+      });
+    }
+    
+    // Search button
+    if (searchBtn) {
+      searchBtn.addEventListener('click', () => {
+        const query = searchInput?.value.trim();
+        if (query && query.length >= 2) {
+          this.searchSpecies(query);
+        }
+      });
+    }
+    
+    // Featured species buttons
+    document.querySelectorAll('.featured-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const guid = btn.dataset.guid;
+        const usePrefetch = btn.dataset.prefetch === 'true';
+        
+        if (usePrefetch && guid === 'NHMSYS0021125602') {
+          // Use pre-fetched woodlark data
+          this.loadWoodlarkPrefetched();
+        } else {
+          window.location.hash = `/species/${guid}`;
+        }
+      });
+    });
+    
+    // Back to search link
+    if (backLink) {
+      backLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        window.location.hash = '';
+        this.showLanding();
+      });
+    }
+    
+    // Close search results when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.search-container')) {
+        searchResults?.classList.add('hidden');
+      }
+    });
+  }
+  
+  async searchSpecies(query) {
+    const searchResults = document.getElementById('search-results');
+    
+    searchResults.classList.remove('hidden');
+    searchResults.innerHTML = '<div class="search-loading">Searching...</div>';
+    
     try {
-      await this.loadData();
+      const response = await fetch(`/api/species/search?q=${encodeURIComponent(query)}&pageSize=10`);
+      const data = await response.json();
+      
+      if (data.results.length === 0) {
+        searchResults.innerHTML = '<div class="search-no-results">No species found</div>';
+        return;
+      }
+      
+      searchResults.innerHTML = data.results.map(species => {
+        const icon = this.getSpeciesIcon(species.speciesGroup);
+        return `
+          <div class="search-result-item" data-guid="${species.guid}">
+            ${species.imageUrl 
+              ? `<img src="${species.imageUrl}" alt="" class="result-image">` 
+              : `<div class="result-image-placeholder">${icon}</div>`
+            }
+            <div class="result-info">
+              <div class="result-common">${species.commonName || species.scientificName}</div>
+              <div class="result-scientific">${species.scientificName}</div>
+            </div>
+            <div class="result-count">${species.occurrenceCount.toLocaleString()} records</div>
+          </div>
+        `;
+      }).join('');
+      
+      // Bind click events to results
+      searchResults.querySelectorAll('.search-result-item').forEach(item => {
+        item.addEventListener('click', () => {
+          const guid = item.dataset.guid;
+          window.location.hash = `/species/${guid}`;
+          searchResults.classList.add('hidden');
+        });
+      });
+      
+    } catch (error) {
+      console.error('Search error:', error);
+      searchResults.innerHTML = '<div class="search-no-results">Search failed. Please try again.</div>';
+    }
+  }
+  
+  getSpeciesIcon(group) {
+    const icons = {
+      'Birds': '🐦',
+      'bird': '🐦',
+      'Mammals': '🦊',
+      'mammal': '🦊',
+      'Plants': '🌿',
+      'flowering plant': '🌸',
+      'Insects': '🦋',
+      'insect': '🦋',
+      'Fish': '🐟',
+      'Amphibians': '🐸',
+      'Reptiles': '🦎',
+      'Fungi': '🍄',
+      'fungus': '🍄'
+    };
+    return icons[group] || '🔬';
+  }
+  
+  // =========================================
+  // Load Species Data
+  // =========================================
+  async loadSpecies(guid) {
+    this.showLoading('Loading species information...');
+    
+    try {
+      // Get facets first (fast) to know what we're dealing with
+      this.updateLoadingText('Fetching occurrence statistics...');
+      const facetsRes = await fetch(`/api/species/${encodeURIComponent(guid)}/facets`);
+      const facets = await facetsRes.json();
+      
+      // Get species info from search
+      const searchRes = await fetch(`/api/species/search?q=${encodeURIComponent(guid)}&pageSize=1`);
+      const searchData = await searchRes.json();
+      
+      this.species = searchData.results[0] || {
+        guid,
+        scientificName: 'Unknown Species',
+        commonName: ''
+      };
+      this.species.totalRecords = facets.totalRecords;
+      
+      // Update hero with species info
+      this.updateHero();
+      this.showVisualization();
+      
+      // Start loading occurrences
+      const totalRecords = facets.totalRecords;
+      const maxToFetch = Math.min(totalRecords, 50000);
+      
+      this.updateLoadingText(`Loading ${maxToFetch.toLocaleString()} occurrence records...`, 
+        `This may take a moment for species with many records`);
+      
+      const occRes = await fetch(`/api/species/${encodeURIComponent(guid)}/occurrences?max=${maxToFetch}`);
+      const occData = await occRes.json();
+      
+      this.data = {
+        totalRecords: facets.totalRecords,
+        occurrences: occData.occurrences
+      };
+      
+      // Process data
       this.processData();
+      this.processFacets(facets.facets);
+      
+      // Hide loading and initialize visualizations
       this.hideLoading();
-      this.initAnimations();
       this.initMap();
       this.initTimeline();
       this.initSeasonalWheel();
+      this.populateInsights();
       this.initExplorer();
       this.initScrollAnimations();
+      
+      // Animate counter
+      this.animateHeroCounter();
+      
+      // Update page title
+      document.title = `${this.species.commonName || this.species.scientificName} | NBN Atlas Explorer`;
+      
     } catch (error) {
-      console.error('Failed to initialize app:', error);
+      console.error('Failed to load species:', error);
       this.showError(error.message);
     }
   }
   
-  async loadData() {
-    const [occurrencesRes, summaryRes] = await Promise.all([
-      fetch('/data/woodlark-occurrences.json'),
-      fetch('/data/summary.json')
-    ]);
+  async loadWoodlarkPrefetched() {
+    this.showLoading('Loading Woodlark data...');
     
-    if (!occurrencesRes.ok || !summaryRes.ok) {
-      throw new Error('Failed to load data files');
+    try {
+      const [occurrencesRes, summaryRes] = await Promise.all([
+        fetch('/data/woodlark-occurrences.json'),
+        fetch('/data/summary.json')
+      ]);
+      
+      if (!occurrencesRes.ok || !summaryRes.ok) {
+        throw new Error('Failed to load pre-fetched data');
+      }
+      
+      const occData = await occurrencesRes.json();
+      const summary = await summaryRes.json();
+      
+      this.species = {
+        guid: 'NHMSYS0021125602',
+        scientificName: 'Lullula arborea',
+        commonName: 'Woodlark',
+        speciesGroup: 'Birds',
+        totalRecords: occData.totalRecords
+      };
+      
+      this.data = {
+        totalRecords: occData.totalRecords,
+        occurrences: occData.occurrences
+      };
+      
+      // Process data
+      this.processData();
+      this.processFacets(summary.facets);
+      
+      // Update hero
+      this.updateHero();
+      this.showVisualization();
+      
+      // Initialize visualizations
+      this.hideLoading();
+      this.initMap();
+      this.initTimeline();
+      this.initSeasonalWheel();
+      this.populateInsights();
+      this.initExplorer();
+      this.initScrollAnimations();
+      
+      // Update URL without triggering reload
+      history.pushState(null, '', '#/species/NHMSYS0021125602');
+      
+      // Animate counter
+      this.animateHeroCounter();
+      
+      document.title = 'Woodlark | NBN Atlas Explorer';
+      
+    } catch (error) {
+      console.error('Failed to load Woodlark data:', error);
+      // Fall back to API
+      window.location.hash = '/species/NHMSYS0021125602';
     }
+  }
+  
+  updateHero() {
+    const scientificEl = document.getElementById('species-scientific');
+    const commonEl = document.getElementById('species-common');
+    const subtitleEl = document.getElementById('species-subtitle');
     
-    this.data = await occurrencesRes.json();
-    this.summary = await summaryRes.json();
+    if (scientificEl) scientificEl.textContent = this.species.scientificName;
+    if (commonEl) commonEl.textContent = this.species.commonName || this.species.scientificName;
+    if (subtitleEl) subtitleEl.textContent = `Exploring ${this.species.totalRecords?.toLocaleString() || 'occurrence'} records across Britain`;
   }
   
   processData() {
-    // Process by year
+    this.yearData = {};
+    this.monthData = {};
+    this.regionData = {};
+    
     this.data.occurrences.forEach(occ => {
       const year = occ.year;
       if (year) {
-        if (!this.yearData[year]) {
-          this.yearData[year] = [];
-        }
+        if (!this.yearData[year]) this.yearData[year] = [];
         this.yearData[year].push(occ);
       }
       
-      // Process by month
       const month = occ.month;
       if (month) {
         const monthNum = parseInt(month);
-        if (!this.monthData[monthNum]) {
-          this.monthData[monthNum] = [];
-        }
+        if (!this.monthData[monthNum]) this.monthData[monthNum] = [];
         this.monthData[monthNum].push(occ);
       }
       
-      // Process by region
       const region = occ.stateProvince || 'Unknown';
-      if (!this.regionData[region]) {
-        this.regionData[region] = [];
-      }
+      if (!this.regionData[region]) this.regionData[region] = [];
       this.regionData[region].push(occ);
     });
     
-    // Sort years
     this.years = Object.keys(this.yearData).map(Number).sort((a, b) => a - b);
   }
   
+  processFacets(facets) {
+    this.facets = {};
+    if (!facets) return;
+    
+    facets.forEach(facet => {
+      this.facets[facet.fieldName] = facet.fieldResult || [];
+    });
+  }
+  
+  // =========================================
+  // UI Helpers
+  // =========================================
+  showLoading(text = 'Loading...') {
+    const overlay = document.getElementById('loading-overlay');
+    const textEl = document.getElementById('loading-text');
+    
+    if (textEl) textEl.textContent = text;
+    if (overlay) overlay.classList.remove('hidden');
+  }
+  
+  updateLoadingText(text, subtext = '') {
+    const textEl = document.getElementById('loading-text');
+    const subtextEl = document.getElementById('loading-subtext');
+    
+    if (textEl) textEl.textContent = text;
+    if (subtextEl) subtextEl.textContent = subtext;
+  }
+  
   hideLoading() {
-    const loading = document.getElementById('loading-overlay');
-    if (loading) {
-      setTimeout(() => {
-        loading.classList.add('hidden');
-        // Trigger initial animations
-        this.animateHeroCounter();
-      }, 500);
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) {
+      setTimeout(() => overlay.classList.add('hidden'), 300);
     }
   }
   
   showError(message) {
-    const loading = document.getElementById('loading-overlay');
-    if (loading) {
-      loading.innerHTML = `
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) {
+      overlay.innerHTML = `
         <div class="error-message">
           <p>Failed to load data: ${message}</p>
-          <p>Please ensure data files exist in /data directory</p>
+          <a href="#" style="color: var(--burnt-sienna);">Return to search</a>
         </div>
       `;
     }
   }
   
   initAnimations() {
-    // Flying birds
     const birdsContainer = document.getElementById('flying-birds');
-    if (birdsContainer) {
+    if (birdsContainer && typeof FlyingBirds !== 'undefined') {
       this.flyingBirds = new FlyingBirds(birdsContainer);
     }
     
-    // Floating particles
     const particlesContainer = document.getElementById('particles');
-    if (particlesContainer) {
+    if (particlesContainer && typeof FloatingParticles !== 'undefined') {
       this.particles = new FloatingParticles(particlesContainer, 25);
     }
   }
   
   animateHeroCounter() {
     const counterEl = document.getElementById('total-counter');
-    if (counterEl) {
+    if (counterEl && typeof animateCounter !== 'undefined') {
       animateCounter(counterEl, this.data.totalRecords, 2500);
     }
   }
   
   initScrollAnimations() {
-    new ScrollAnimations();
+    if (typeof ScrollAnimations !== 'undefined') {
+      new ScrollAnimations();
+    }
   }
   
   // =========================================
@@ -134,7 +450,12 @@ class WoodlarkApp {
     const mapContainer = document.getElementById('uk-map');
     if (!mapContainer) return;
     
-    // Initialize Leaflet map centered on UK
+    // Clean up existing map
+    if (this.map) {
+      this.map.remove();
+      this.map = null;
+    }
+    
     this.map = L.map('uk-map', {
       center: [54.5, -2.5],
       zoom: 5,
@@ -144,13 +465,11 @@ class WoodlarkApp {
       scrollWheelZoom: true
     });
     
-    // Add OpenStreetMap tiles with a warm, natural style
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       opacity: 0.85
     }).addTo(this.map);
     
-    // Create a layer group for occurrence markers
     this.markersLayer = L.layerGroup().addTo(this.map);
     
     // Year slider
@@ -160,7 +479,7 @@ class WoodlarkApp {
     if (yearSlider && this.years.length > 0) {
       yearSlider.min = 0;
       yearSlider.max = this.years.length;
-      yearSlider.value = this.years.length; // Start at "all"
+      yearSlider.value = this.years.length;
       
       yearSlider.addEventListener('input', (e) => {
         const idx = parseInt(e.target.value);
@@ -176,7 +495,6 @@ class WoodlarkApp {
       });
     }
     
-    // Initial markers
     this.updateMapMarkers();
     this.updateRegionStats();
   }
@@ -184,10 +502,8 @@ class WoodlarkApp {
   updateMapMarkers() {
     if (!this.markersLayer) return;
     
-    // Clear existing markers
     this.markersLayer.clearLayers();
     
-    // Get occurrences for current year
     let occurrences;
     if (this.currentYear === 'all') {
       occurrences = this.data.occurrences;
@@ -195,39 +511,22 @@ class WoodlarkApp {
       occurrences = this.yearData[this.currentYear] || [];
     }
     
-    // Custom icon for woodlark sightings
-    const woodlarkIcon = L.divIcon({
+    const icon = L.divIcon({
       className: 'woodlark-marker',
       html: '<div class="marker-dot"></div>',
       iconSize: [10, 10],
       iconAnchor: [5, 5]
     });
     
-    // Sample for performance (show up to 3000 markers)
+    // Sample for performance
     const sampleSize = Math.min(occurrences.length, 3000);
     const step = Math.max(1, Math.floor(occurrences.length / sampleSize));
     
     for (let i = 0; i < occurrences.length; i += step) {
       const occ = occurrences[i];
       if (occ.decimalLatitude && occ.decimalLongitude) {
-        const marker = L.circleMarker([occ.decimalLatitude, occ.decimalLongitude], {
-          radius: 4,
-          fillColor: '#A0522D',
-          color: '#5D4E37',
-          weight: 1,
-          opacity: 0.8,
-          fillOpacity: 0.6
-        });
-        
-        // Add popup with occurrence info
-        const popupContent = `
-          <strong>${occ.vernacularName || occ.scientificName}</strong><br>
-          <span style="color: #8B7355;">Year: ${occ.year || 'Unknown'}</span><br>
-          <span style="color: #8B7355;">${occ.stateProvince || ''}</span>
-        `;
-        marker.bindPopup(popupContent);
-        
-        this.markersLayer.addLayer(marker);
+        L.marker([occ.decimalLatitude, occ.decimalLongitude], { icon })
+          .addTo(this.markersLayer);
       }
     }
   }
@@ -236,9 +535,6 @@ class WoodlarkApp {
     const statsContainer = document.getElementById('region-stats');
     if (!statsContainer) return;
     
-    // Calculate counts for current selection
-    let regionCounts = {};
-    
     let occurrences;
     if (this.currentYear === 'all') {
       occurrences = this.data.occurrences;
@@ -246,122 +542,83 @@ class WoodlarkApp {
       occurrences = this.yearData[this.currentYear] || [];
     }
     
+    const regionCounts = {};
     occurrences.forEach(occ => {
       const region = occ.stateProvince || 'Unknown';
       regionCounts[region] = (regionCounts[region] || 0) + 1;
     });
     
-    // Sort by count
-    const sorted = Object.entries(regionCounts)
+    const sortedRegions = Object.entries(regionCounts)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 6);
     
-    statsContainer.innerHTML = sorted.map(([name, count]) => `
+    const maxCount = sortedRegions[0]?.[1] || 1;
+    
+    statsContainer.innerHTML = sortedRegions.map(([region, count]) => `
       <div class="region-stat">
-        <span class="region-name">${name}</span>
-        <span class="region-count">${count.toLocaleString()}</span>
+        <div class="region-name">${region}</div>
+        <div class="region-bar-container">
+          <div class="region-bar" style="width: ${(count / maxCount) * 100}%"></div>
+        </div>
+        <div class="region-count">${count.toLocaleString()}</div>
       </div>
     `).join('');
   }
   
   // =========================================
-  // Timeline Visualization
+  // Timeline
   // =========================================
   initTimeline() {
-    const track = document.getElementById('timeline-track');
-    const tooltip = document.getElementById('timeline-tooltip');
-    if (!track) return;
+    const trackContainer = document.getElementById('timeline-track');
+    const decadesContainer = document.getElementById('timeline-decades');
     
-    // Get year facet data from summary
-    const yearFacet = this.summary.facets?.find(f => f.fieldName === 'year');
-    const yearCounts = {};
+    if (!trackContainer || this.years.length === 0) return;
     
-    if (yearFacet) {
-      yearFacet.fieldResult.forEach(item => {
-        yearCounts[item.label] = item.count;
-      });
+    const yearCounts = this.years.map(year => ({
+      year,
+      count: this.yearData[year]?.length || 0
+    }));
+    
+    const maxCount = Math.max(...yearCounts.map(y => y.count));
+    
+    trackContainer.innerHTML = this.years.map(year => {
+      const count = this.yearData[year]?.length || 0;
+      const height = (count / maxCount) * 100;
+      return `
+        <div class="timeline-bar" 
+             data-year="${year}" 
+             data-count="${count}"
+             style="height: ${Math.max(height, 2)}%">
+        </div>
+      `;
+    }).join('');
+    
+    // Decade labels
+    const decades = [...new Set(this.years.map(y => Math.floor(y / 10) * 10))];
+    if (decadesContainer) {
+      decadesContainer.innerHTML = decades.map(decade => `
+        <span class="decade-label">${decade}s</span>
+      `).join('');
     }
     
-    // Also compute from raw data
-    Object.entries(this.yearData).forEach(([year, occs]) => {
-      if (!yearCounts[year]) {
-        yearCounts[year] = occs.length;
-      }
-    });
-    
-    const maxCount = Math.max(...Object.values(yearCounts));
-    
-    // Create bars for each year
-    const allYears = Object.keys(yearCounts).map(Number).sort((a, b) => a - b);
-    
-    allYears.forEach(year => {
-      const count = yearCounts[year] || 0;
-      const heightPercent = (count / maxCount) * 100;
-      
-      const bar = document.createElement('div');
-      bar.className = 'timeline-bar';
-      bar.setAttribute('data-year', year);
-      bar.setAttribute('data-count', count);
-      bar.style.height = `${Math.max(heightPercent, 2)}%`;
-      
+    // Tooltips
+    const tooltip = document.getElementById('timeline-tooltip');
+    trackContainer.querySelectorAll('.timeline-bar').forEach(bar => {
       bar.addEventListener('mouseenter', (e) => {
-        this.showTimelineTooltip(tooltip, e.target, year, count);
+        const year = bar.dataset.year;
+        const count = bar.dataset.count;
+        tooltip.textContent = `${year}: ${parseInt(count).toLocaleString()} sightings`;
+        tooltip.style.opacity = '1';
+        
+        const rect = bar.getBoundingClientRect();
+        const containerRect = trackContainer.getBoundingClientRect();
+        tooltip.style.left = `${rect.left - containerRect.left + rect.width / 2}px`;
       });
       
       bar.addEventListener('mouseleave', () => {
-        tooltip.classList.remove('visible');
+        tooltip.style.opacity = '0';
       });
-      
-      bar.addEventListener('click', () => {
-        // Update map to this year
-        const yearSlider = document.getElementById('year-slider');
-        const yearDisplay = document.getElementById('year-display');
-        if (yearSlider) {
-          const idx = this.years.indexOf(year);
-          if (idx !== -1) {
-            yearSlider.value = idx;
-            this.currentYear = year;
-            yearDisplay.textContent = year;
-            this.updateMapDots();
-            this.updateRegionStats();
-          }
-        }
-        
-        // Highlight this bar
-        track.querySelectorAll('.timeline-bar').forEach(b => b.classList.remove('active'));
-        bar.classList.add('active');
-      });
-      
-      track.appendChild(bar);
     });
-    
-    // Add decade markers
-    this.addDecadeMarkers(allYears);
-  }
-  
-  showTimelineTooltip(tooltip, bar, year, count) {
-    tooltip.innerHTML = `
-      <div class="tooltip-year">${year}</div>
-      <div class="tooltip-count">${count.toLocaleString()} sightings</div>
-    `;
-    
-    const rect = bar.getBoundingClientRect();
-    const trackRect = bar.parentElement.getBoundingClientRect();
-    
-    tooltip.style.left = `${rect.left - trackRect.left + rect.width / 2}px`;
-    tooltip.style.bottom = `${trackRect.bottom - rect.top + 10}px`;
-    tooltip.classList.add('visible');
-  }
-  
-  addDecadeMarkers(years) {
-    const decadesContainer = document.getElementById('timeline-decades');
-    if (!decadesContainer) return;
-    
-    const decades = [...new Set(years.map(y => Math.floor(y / 10) * 10))];
-    
-    decadesContainer.innerHTML = decades.map(decade => `
-      <div class="decade-marker">${decade}s</div>
-    `).join('');
   }
   
   // =========================================
@@ -372,131 +629,62 @@ class WoodlarkApp {
     if (!wheelContainer) return;
     
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
-                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     
-    // Get monthly counts
-    const monthCounts = months.map((_, i) => {
-      return this.monthData[i + 1]?.length || 0;
-    });
+    const monthCounts = months.map((_, i) => this.monthData[i + 1]?.length || 0);
+    const maxCount = Math.max(...monthCounts, 1);
     
-    const maxMonth = Math.max(...monthCounts);
-    
-    // Create SVG wheel
     const size = 400;
     const center = size / 2;
     const outerRadius = 180;
     const innerRadius = 60;
     
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.setAttribute('viewBox', `0 0 ${size} ${size}`);
-    svg.setAttribute('class', 'seasonal-wheel');
+    let svg = `<svg class="seasonal-wheel" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">`;
     
-    // Create segments
     months.forEach((month, i) => {
       const count = monthCounts[i];
-      const radiusScale = innerRadius + (outerRadius - innerRadius) * (count / maxMonth);
+      const ratio = count / maxCount;
+      const segmentRadius = innerRadius + (outerRadius - innerRadius) * ratio;
       
       const startAngle = (i * 30 - 90) * Math.PI / 180;
       const endAngle = ((i + 1) * 30 - 90) * Math.PI / 180;
       
-      // Inner arc
-      const innerX1 = center + innerRadius * Math.cos(startAngle);
-      const innerY1 = center + innerRadius * Math.sin(startAngle);
-      const innerX2 = center + innerRadius * Math.cos(endAngle);
-      const innerY2 = center + innerRadius * Math.sin(endAngle);
+      const x1 = center + innerRadius * Math.cos(startAngle);
+      const y1 = center + innerRadius * Math.sin(startAngle);
+      const x2 = center + segmentRadius * Math.cos(startAngle);
+      const y2 = center + segmentRadius * Math.sin(startAngle);
+      const x3 = center + segmentRadius * Math.cos(endAngle);
+      const y3 = center + segmentRadius * Math.sin(endAngle);
+      const x4 = center + innerRadius * Math.cos(endAngle);
+      const y4 = center + innerRadius * Math.sin(endAngle);
       
-      // Outer arc (scaled by count)
-      const outerX1 = center + radiusScale * Math.cos(startAngle);
-      const outerY1 = center + radiusScale * Math.sin(startAngle);
-      const outerX2 = center + radiusScale * Math.cos(endAngle);
-      const outerY2 = center + radiusScale * Math.sin(endAngle);
+      const hue = 30 + ratio * 20;
+      const saturation = 50 + ratio * 30;
+      const lightness = 70 - ratio * 25;
       
-      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      path.setAttribute('d', `
-        M ${innerX1} ${innerY1}
-        L ${outerX1} ${outerY1}
-        A ${radiusScale} ${radiusScale} 0 0 1 ${outerX2} ${outerY2}
-        L ${innerX2} ${innerY2}
-        A ${innerRadius} ${innerRadius} 0 0 0 ${innerX1} ${innerY1}
-        Z
-      `);
+      svg += `
+        <path class="wheel-segment" 
+              d="M ${x1} ${y1} L ${x2} ${y2} A ${segmentRadius} ${segmentRadius} 0 0 1 ${x3} ${y3} L ${x4} ${y4} A ${innerRadius} ${innerRadius} 0 0 0 ${x1} ${y1} Z"
+              fill="hsl(${hue}, ${saturation}%, ${lightness}%)"
+              data-month="${month}" 
+              data-count="${count}">
+        </path>
+      `;
       
-      // Color based on season
-      const seasonColors = {
-        winter: '#7BA7BC',
-        spring: '#4A6B5A',
-        summer: '#D4A574',
-        autumn: '#A0522D'
-      };
-      
-      let season;
-      if (i >= 2 && i <= 4) season = 'spring';
-      else if (i >= 5 && i <= 7) season = 'summer';
-      else if (i >= 8 && i <= 10) season = 'autumn';
-      else season = 'winter';
-      
-      path.setAttribute('fill', seasonColors[season]);
-      path.setAttribute('class', 'wheel-segment');
-      path.setAttribute('data-month', month);
-      path.setAttribute('data-count', count);
-      
-      svg.appendChild(path);
-      
-      // Month label
       const labelAngle = ((i + 0.5) * 30 - 90) * Math.PI / 180;
       const labelRadius = outerRadius + 25;
       const labelX = center + labelRadius * Math.cos(labelAngle);
       const labelY = center + labelRadius * Math.sin(labelAngle);
       
-      const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      label.setAttribute('x', labelX);
-      label.setAttribute('y', labelY);
-      label.setAttribute('text-anchor', 'middle');
-      label.setAttribute('dominant-baseline', 'middle');
-      label.setAttribute('class', 'wheel-month-label');
-      label.textContent = month;
-      svg.appendChild(label);
+      svg += `<text class="wheel-month-label" x="${labelX}" y="${labelY}" text-anchor="middle" dominant-baseline="middle">${month}</text>`;
     });
     
-    // Center circle
-    const centerCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    centerCircle.setAttribute('cx', center);
-    centerCircle.setAttribute('cy', center);
-    centerCircle.setAttribute('r', innerRadius - 5);
-    centerCircle.setAttribute('class', 'wheel-center');
-    svg.appendChild(centerCircle);
+    svg += `<circle class="wheel-center" cx="${center}" cy="${center}" r="${innerRadius - 5}"/>`;
+    svg += '</svg>';
     
-    // Center text
-    const centerText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    centerText.setAttribute('x', center);
-    centerText.setAttribute('y', center);
-    centerText.setAttribute('text-anchor', 'middle');
-    centerText.setAttribute('dominant-baseline', 'middle');
-    centerText.setAttribute('font-family', 'Playfair Display');
-    centerText.setAttribute('font-size', '14');
-    centerText.setAttribute('fill', '#5D4E37');
-    centerText.textContent = 'Seasonal';
-    
-    const centerText2 = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    centerText2.setAttribute('x', center);
-    centerText2.setAttribute('y', center + 16);
-    centerText2.setAttribute('text-anchor', 'middle');
-    centerText2.setAttribute('dominant-baseline', 'middle');
-    centerText2.setAttribute('font-family', 'Playfair Display');
-    centerText2.setAttribute('font-size', '14');
-    centerText2.setAttribute('fill', '#5D4E37');
-    centerText2.textContent = 'Distribution';
-    
-    svg.appendChild(centerText);
-    svg.appendChild(centerText2);
-    
-    wheelContainer.appendChild(svg);
+    wheelContainer.innerHTML = svg;
     
     // Season cards
-    this.populateSeasonCards(monthCounts);
-  }
-  
-  populateSeasonCards(monthCounts) {
     const seasons = [
       { name: 'Spring', months: 'March - May', indices: [2, 3, 4] },
       { name: 'Summer', months: 'June - August', indices: [5, 6, 7] },
@@ -505,18 +693,124 @@ class WoodlarkApp {
     ];
     
     const cardsContainer = document.getElementById('season-cards');
-    if (!cardsContainer) return;
+    if (cardsContainer) {
+      cardsContainer.innerHTML = seasons.map(season => {
+        const count = season.indices.reduce((sum, i) => sum + (monthCounts[i] || 0), 0);
+        return `
+          <div class="season-card">
+            <div class="season-name">${season.name}</div>
+            <div class="season-months">${season.months}</div>
+            <div class="season-count">${count.toLocaleString()} sightings</div>
+          </div>
+        `;
+      }).join('');
+    }
+  }
+  
+  // =========================================
+  // Insights
+  // =========================================
+  populateInsights() {
+    const grid = document.getElementById('insights-grid');
+    const subtitle = document.getElementById('insights-subtitle');
     
-    cardsContainer.innerHTML = seasons.map(season => {
-      const count = season.indices.reduce((sum, i) => sum + (monthCounts[i] || 0), 0);
-      return `
-        <div class="season-card">
-          <div class="season-name">${season.name}</div>
-          <div class="season-months">${season.months}</div>
-          <div class="season-count">${count.toLocaleString()} sightings</div>
-        </div>
-      `;
-    }).join('');
+    if (!grid) return;
+    
+    // Calculate insights from data
+    const totalRecords = this.data.totalRecords;
+    const years = this.years;
+    const firstYear = years[0] || 'N/A';
+    const lastYear = years[years.length - 1] || 'N/A';
+    const yearSpan = years.length > 1 ? lastYear - firstYear + 1 : 1;
+    
+    // Peak year
+    const peakYear = years.reduce((max, year) => {
+      const count = this.yearData[year]?.length || 0;
+      return count > (this.yearData[max]?.length || 0) ? year : max;
+    }, years[0]);
+    const peakYearCount = this.yearData[peakYear]?.length || 0;
+    
+    // Top region
+    const regions = Object.entries(this.regionData)
+      .filter(([r]) => r !== 'Unknown')
+      .sort((a, b) => b[1].length - a[1].length);
+    const topRegion = regions[0]?.[0] || 'Unknown';
+    const topRegionPct = ((regions[0]?.[1].length || 0) / totalRecords * 100).toFixed(1);
+    
+    // Breeding season (Mar-Jul for birds, or peak months)
+    const monthCounts = {};
+    for (let i = 1; i <= 12; i++) {
+      monthCounts[i] = this.monthData[i]?.length || 0;
+    }
+    
+    const breedingMonths = [3, 4, 5, 6, 7];
+    const breedingCount = breedingMonths.reduce((sum, m) => sum + monthCounts[m], 0);
+    const totalWithMonth = Object.values(monthCounts).reduce((a, b) => a + b, 0);
+    const breedingPct = ((breedingCount / totalWithMonth) * 100).toFixed(0);
+    
+    // Decade comparison
+    const decade2010s = years.filter(y => y >= 2010 && y < 2020);
+    const decade2020s = years.filter(y => y >= 2020);
+    
+    const avg2010s = decade2010s.length > 0 
+      ? decade2010s.reduce((sum, y) => sum + (this.yearData[y]?.length || 0), 0) / decade2010s.length 
+      : 0;
+    const avg2020s = decade2020s.length > 0 
+      ? decade2020s.reduce((sum, y) => sum + (this.yearData[y]?.length || 0), 0) / decade2020s.length 
+      : 0;
+    
+    const trendPct = avg2010s > 0 ? (((avg2020s - avg2010s) / avg2010s) * 100).toFixed(0) : 'N/A';
+    const trendSign = parseInt(trendPct) > 0 ? '+' : '';
+    
+    // Update subtitle
+    if (subtitle) {
+      subtitle.textContent = `Key findings from analyzing ${yearSpan} years of ${this.species.commonName || this.species.scientificName} observations across Britain.`;
+    }
+    
+    // Generate insight cards
+    grid.innerHTML = `
+      <div class="insight-card insight-trend">
+        <div class="insight-icon">📈</div>
+        <div class="insight-value">${trendPct !== 'N/A' ? trendSign + trendPct + '%' : 'N/A'}</div>
+        <div class="insight-label">2020s vs 2010s Trend</div>
+        <p class="insight-detail">Comparing average annual sightings between the 2010s and 2020s.</p>
+      </div>
+      
+      <div class="insight-card insight-breeding">
+        <div class="insight-icon">📅</div>
+        <div class="insight-value">${breedingPct}%</div>
+        <div class="insight-label">Peak Season (Mar-Jul)</div>
+        <p class="insight-detail">Percentage of records occurring during the spring and early summer months.</p>
+      </div>
+      
+      <div class="insight-card insight-hotspot">
+        <div class="insight-icon">📍</div>
+        <div class="insight-value">${topRegion}</div>
+        <div class="insight-label">Top Region (${topRegionPct}%)</div>
+        <p class="insight-detail">The area with the highest concentration of recorded sightings.</p>
+      </div>
+      
+      <div class="insight-card insight-peak">
+        <div class="insight-icon">🏆</div>
+        <div class="insight-value">${peakYear}</div>
+        <div class="insight-label">Peak Year (${peakYearCount.toLocaleString()})</div>
+        <p class="insight-detail">The year with the most recorded observations in the dataset.</p>
+      </div>
+      
+      <div class="insight-card insight-span">
+        <div class="insight-icon">📚</div>
+        <div class="insight-value">${yearSpan} Years</div>
+        <div class="insight-label">Data Range (${firstYear}-${lastYear})</div>
+        <p class="insight-detail">The total time span covered by occurrence records.</p>
+      </div>
+      
+      <div class="insight-card insight-total">
+        <div class="insight-icon">🔢</div>
+        <div class="insight-value">${totalRecords.toLocaleString()}</div>
+        <div class="insight-label">Total Records</div>
+        <p class="insight-detail">The complete number of occurrence observations available.</p>
+      </div>
+    `;
   }
   
   // =========================================
@@ -537,6 +831,11 @@ class WoodlarkApp {
     const regionSelect = document.getElementById('filter-region');
     if (!regionSelect) return;
     
+    // Clear existing options except first
+    while (regionSelect.options.length > 1) {
+      regionSelect.remove(1);
+    }
+    
     const regions = Object.keys(this.regionData).sort();
     regions.forEach(region => {
       if (region && region !== 'Unknown') {
@@ -549,51 +848,47 @@ class WoodlarkApp {
   }
   
   bindExplorerEvents() {
-    // Apply filters button
     const applyBtn = document.getElementById('apply-filters');
-    if (applyBtn) {
-      applyBtn.addEventListener('click', () => this.applyFilters());
-    }
-    
-    // Reset filters button
     const resetBtn = document.getElementById('reset-filters');
-    if (resetBtn) {
-      resetBtn.addEventListener('click', () => this.resetFilters());
-    }
-    
-    // Export CSV button
     const exportBtn = document.getElementById('export-csv');
-    if (exportBtn) {
-      exportBtn.addEventListener('click', () => this.exportCSV());
-    }
-    
-    // Pagination buttons
     const prevBtn = document.getElementById('page-prev');
     const nextBtn = document.getElementById('page-next');
     
+    if (applyBtn) {
+      applyBtn.onclick = () => this.applyFilters();
+    }
+    
+    if (resetBtn) {
+      resetBtn.onclick = () => this.resetFilters();
+    }
+    
+    if (exportBtn) {
+      exportBtn.onclick = () => this.exportCSV();
+    }
+    
     if (prevBtn) {
-      prevBtn.addEventListener('click', () => {
+      prevBtn.onclick = () => {
         if (this.explorerPage > 1) {
           this.explorerPage--;
           this.updateExplorerTable();
         }
-      });
+      };
     }
     
     if (nextBtn) {
-      nextBtn.addEventListener('click', () => {
+      nextBtn.onclick = () => {
         const totalPages = Math.ceil(this.filteredData.length / this.explorerPageSize);
         if (this.explorerPage < totalPages) {
           this.explorerPage++;
           this.updateExplorerTable();
         }
-      });
+      };
     }
     
     // Table header sorting
     const headers = document.querySelectorAll('.data-table th[data-sort]');
     headers.forEach(header => {
-      header.addEventListener('click', () => {
+      header.onclick = () => {
         const key = header.dataset.sort;
         if (this.explorerSort.key === key) {
           this.explorerSort.dir = this.explorerSort.dir === 'asc' ? 'desc' : 'asc';
@@ -603,7 +898,7 @@ class WoodlarkApp {
         }
         this.sortFilteredData();
         this.updateExplorerTable();
-      });
+      };
     });
   }
   
@@ -622,14 +917,10 @@ class WoodlarkApp {
     };
     
     this.filteredData = this.data.occurrences.filter(occ => {
-      // Year range filter
       if (yearMin && occ.year < yearMin) return false;
       if (yearMax && occ.year > yearMax) return false;
-      
-      // Region filter
       if (region && occ.stateProvince !== region) return false;
       
-      // Month filter (takes precedence over season)
       if (month) {
         const occMonth = parseInt(occ.month);
         if (occMonth !== month) return false;
@@ -647,7 +938,6 @@ class WoodlarkApp {
   }
   
   resetFilters() {
-    // Clear filter inputs
     const yearMin = document.getElementById('filter-year-min');
     const yearMax = document.getElementById('filter-year-max');
     const region = document.getElementById('filter-region');
@@ -660,7 +950,6 @@ class WoodlarkApp {
     if (month) month.value = '';
     if (season) season.value = '';
     
-    // Reset data
     this.filteredData = [...this.data.occurrences];
     this.explorerPage = 1;
     this.sortFilteredData();
@@ -674,45 +963,22 @@ class WoodlarkApp {
       let aVal, bVal;
       
       switch (key) {
-        case 'year':
-          aVal = a.year || 0;
-          bVal = b.year || 0;
-          break;
-        case 'month':
-          aVal = parseInt(a.month) || 0;
-          bVal = parseInt(b.month) || 0;
-          break;
-        case 'region':
-          aVal = a.stateProvince || '';
-          bVal = b.stateProvince || '';
-          break;
-        case 'lat':
-          aVal = a.decimalLatitude || 0;
-          bVal = b.decimalLatitude || 0;
-          break;
-        case 'lng':
-          aVal = a.decimalLongitude || 0;
-          bVal = b.decimalLongitude || 0;
-          break;
-        case 'basis':
-          aVal = a.basisOfRecord || '';
-          bVal = b.basisOfRecord || '';
-          break;
-        default:
-          aVal = a[key] || '';
-          bVal = b[key] || '';
+        case 'year': aVal = a.year || 0; bVal = b.year || 0; break;
+        case 'month': aVal = parseInt(a.month) || 0; bVal = parseInt(b.month) || 0; break;
+        case 'region': aVal = a.stateProvince || ''; bVal = b.stateProvince || ''; break;
+        case 'lat': aVal = a.decimalLatitude || 0; bVal = b.decimalLatitude || 0; break;
+        case 'lng': aVal = a.decimalLongitude || 0; bVal = b.decimalLongitude || 0; break;
+        case 'basis': aVal = a.basisOfRecord || ''; bVal = b.basisOfRecord || ''; break;
+        default: aVal = a[key] || ''; bVal = b[key] || '';
       }
       
       if (typeof aVal === 'string') {
-        return dir === 'asc' 
-          ? aVal.localeCompare(bVal) 
-          : bVal.localeCompare(aVal);
+        return dir === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
       }
       
       return dir === 'asc' ? aVal - bVal : bVal - aVal;
     });
     
-    // Update sort indicators
     const headers = document.querySelectorAll('.data-table th[data-sort]');
     headers.forEach(h => {
       h.removeAttribute('data-sort-active');
@@ -735,24 +1001,16 @@ class WoodlarkApp {
     const totalRecords = this.filteredData.length;
     const totalPages = Math.max(1, Math.ceil(totalRecords / this.explorerPageSize));
     
-    // Ensure page is in bounds
     this.explorerPage = Math.min(this.explorerPage, totalPages);
     this.explorerPage = Math.max(1, this.explorerPage);
     
-    // Update count
-    if (countEl) {
-      countEl.textContent = totalRecords.toLocaleString();
-    }
-    
-    // Update pagination display
+    if (countEl) countEl.textContent = totalRecords.toLocaleString();
     if (currentPageEl) currentPageEl.textContent = this.explorerPage;
     if (totalPagesEl) totalPagesEl.textContent = totalPages;
     
-    // Enable/disable pagination buttons
     if (prevBtn) prevBtn.disabled = this.explorerPage <= 1;
     if (nextBtn) nextBtn.disabled = this.explorerPage >= totalPages;
     
-    // Get page data
     const startIdx = (this.explorerPage - 1) * this.explorerPageSize;
     const endIdx = startIdx + this.explorerPageSize;
     const pageData = this.filteredData.slice(startIdx, endIdx);
@@ -793,12 +1051,7 @@ class WoodlarkApp {
   
   formatBasisOfRecord(basis) {
     if (!basis) return '—';
-    // Convert camelCase/PascalCase to readable format
-    const formatted = basis
-      .replace(/([A-Z])/g, ' $1')
-      .replace(/^./, str => str.toUpperCase())
-      .trim();
-    return formatted;
+    return basis.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()).trim();
   }
   
   exportCSV() {
@@ -807,10 +1060,8 @@ class WoodlarkApp {
       return;
     }
     
-    // CSV headers
     const headers = ['Year', 'Month', 'Region', 'Latitude', 'Longitude', 'Record Type', 'Scientific Name', 'Vernacular Name'];
     
-    // Build CSV content
     const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June', 
                         'July', 'August', 'September', 'October', 'November', 'December'];
     
@@ -823,10 +1074,9 @@ class WoodlarkApp {
         occ.decimalLatitude || '',
         occ.decimalLongitude || '',
         occ.basisOfRecord || '',
-        occ.scientificName || 'Lullula arborea',
-        occ.vernacularName || 'Woodlark'
+        occ.scientificName || this.species.scientificName,
+        occ.vernacularName || this.species.commonName
       ].map(val => {
-        // Escape quotes and wrap in quotes if contains comma
         const str = String(val);
         if (str.includes(',') || str.includes('"') || str.includes('\n')) {
           return `"${str.replace(/"/g, '""')}"`;
@@ -836,13 +1086,13 @@ class WoodlarkApp {
     });
     
     const csvContent = [headers.join(','), ...rows].join('\n');
+    const speciesName = (this.species.commonName || this.species.scientificName).replace(/\s+/g, '-').toLowerCase();
     
-    // Create download
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `woodlark-occurrences-${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `${speciesName}-occurrences-${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -852,5 +1102,5 @@ class WoodlarkApp {
 
 // Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-  window.app = new WoodlarkApp();
+  window.app = new SpeciesExplorer();
 });
