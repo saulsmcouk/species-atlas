@@ -211,6 +211,8 @@ class SpeciesExplorer {
   // =========================================
   async loadSpecies(guid) {
     this.showLoading('Loading species information...');
+    this.loadStartTime = Date.now();
+    this.loadingTimerInterval = null;
     
     try {
       // Get facets first (fast) to know what we're dealing with
@@ -233,19 +235,75 @@ class SpeciesExplorer {
       this.updateHero();
       this.showVisualization();
       
-      // Start loading occurrences
-      const totalRecords = facets.totalRecords;
-      const maxToFetch = Math.min(totalRecords, 50000);
+      // Get year breakdown from facets
+      const yearFacet = facets.facets?.find(f => f.fieldName === 'year');
+      const yearCounts = {};
+      let totalToFetch = 0;
+      const maxRecords = 50000;
       
-      this.updateLoadingText(`Loading ${maxToFetch.toLocaleString()} occurrence records...`, 
-        `This may take a moment for species with many records`);
+      if (yearFacet?.fieldResult) {
+        // Sort years and calculate how many records we'll fetch
+        const sortedYears = yearFacet.fieldResult
+          .map(y => ({ year: parseInt(y.label), count: y.count }))
+          .filter(y => !isNaN(y.year))
+          .sort((a, b) => b.year - a.year); // Most recent first
+        
+        for (const y of sortedYears) {
+          if (totalToFetch >= maxRecords) break;
+          const toFetch = Math.min(y.count, maxRecords - totalToFetch, 5000);
+          yearCounts[y.year] = toFetch;
+          totalToFetch += toFetch;
+        }
+      }
       
-      const occRes = await fetch(`/api/species/${encodeURIComponent(guid)}/occurrences?max=${maxToFetch}`);
-      const occData = await occRes.json();
+      const years = Object.keys(yearCounts).map(Number).sort((a, b) => b - a);
+      
+      if (years.length === 0) {
+        this.data = { totalRecords: 0, occurrences: [] };
+        this.hideLoading();
+        return;
+      }
+      
+      // Show progress bar
+      this.showProgressBar(0, totalToFetch);
+      this.startLoadingTimer();
+      
+      this.updateLoadingText(`Loading ${totalToFetch.toLocaleString()} occurrence records...`, 
+        `Fetching data from ${years.length} years`);
+      
+      // Fetch year by year with progress
+      let allOccurrences = [];
+      let fetchedCount = 0;
+      
+      for (let i = 0; i < years.length; i++) {
+        const year = years[i];
+        const maxForYear = yearCounts[year];
+        
+        try {
+          const occRes = await fetch(`/api/species/${encodeURIComponent(guid)}/occurrences/${year}?max=${maxForYear}`);
+          const occData = await occRes.json();
+          
+          if (occData.occurrences) {
+            allOccurrences = allOccurrences.concat(occData.occurrences);
+            fetchedCount += occData.occurrences.length;
+          }
+          
+          // Update progress
+          this.updateProgress(fetchedCount, totalToFetch);
+          this.updateLoadingText(
+            `Loading occurrence records...`, 
+            `Year ${year} complete (${i + 1}/${years.length})`
+          );
+        } catch (err) {
+          console.warn(`Failed to fetch year ${year}:`, err);
+        }
+      }
+      
+      this.stopLoadingTimer();
       
       this.data = {
         totalRecords: facets.totalRecords,
-        occurrences: occData.occurrences
+        occurrences: allOccurrences
       };
       
       // Process data
@@ -269,6 +327,7 @@ class SpeciesExplorer {
       
     } catch (error) {
       console.error('Failed to load species:', error);
+      this.stopLoadingTimer();
       this.showError(error.message);
     }
   }
@@ -386,9 +445,14 @@ class SpeciesExplorer {
   showLoading(text = 'Loading...') {
     const overlay = document.getElementById('loading-overlay');
     const textEl = document.getElementById('loading-text');
+    const progressContainer = document.getElementById('loading-progress-container');
     
     if (textEl) textEl.textContent = text;
     if (overlay) overlay.classList.remove('hidden');
+    if (progressContainer) progressContainer.classList.remove('visible');
+    
+    // Reset progress bar
+    this.updateProgress(0, 0);
   }
   
   updateLoadingText(text, subtext = '') {
@@ -399,10 +463,62 @@ class SpeciesExplorer {
     if (subtextEl) subtextEl.textContent = subtext;
   }
   
+  showProgressBar(current, total) {
+    const progressContainer = document.getElementById('loading-progress-container');
+    if (progressContainer) {
+      progressContainer.classList.add('visible');
+    }
+    this.updateProgress(current, total);
+  }
+  
+  updateProgress(current, total) {
+    const progressFill = document.getElementById('loading-progress-fill');
+    const recordsEl = document.getElementById('loading-records');
+    
+    const percentage = total > 0 ? (current / total) * 100 : 0;
+    
+    if (progressFill) {
+      progressFill.style.width = `${Math.min(percentage, 100)}%`;
+    }
+    
+    if (recordsEl) {
+      recordsEl.textContent = `${current.toLocaleString()} / ${total.toLocaleString()} records`;
+    }
+  }
+  
+  startLoadingTimer() {
+    this.loadStartTime = Date.now();
+    const timeEl = document.getElementById('loading-time');
+    
+    this.loadingTimerInterval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - this.loadStartTime) / 1000);
+      const minutes = Math.floor(elapsed / 60);
+      const seconds = elapsed % 60;
+      
+      if (timeEl) {
+        timeEl.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+      }
+    }, 1000);
+  }
+  
+  stopLoadingTimer() {
+    if (this.loadingTimerInterval) {
+      clearInterval(this.loadingTimerInterval);
+      this.loadingTimerInterval = null;
+    }
+  }
+  
   hideLoading() {
     const overlay = document.getElementById('loading-overlay');
+    const progressContainer = document.getElementById('loading-progress-container');
+    
+    this.stopLoadingTimer();
+    
     if (overlay) {
       setTimeout(() => overlay.classList.add('hidden'), 300);
+    }
+    if (progressContainer) {
+      progressContainer.classList.remove('visible');
     }
   }
   

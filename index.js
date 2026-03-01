@@ -167,6 +167,52 @@ app.get('/api/species/:guid/occurrences', async (req, res) => {
   }
 });
 
+// Fetch occurrences for a single year (for progress tracking)
+app.get('/api/species/:guid/occurrences/:year', async (req, res) => {
+  try {
+    const guid = req.params.guid;
+    const year = req.params.year;
+    const maxRecords = parseInt(req.query.max) || 5000;
+    
+    let allOccurrences = [];
+    const PAGE_SIZE = 1000;
+    let startIndex = 0;
+    
+    while (allOccurrences.length < maxRecords) {
+      const url = `${RECORDS_API}/occurrences/search?q=lsid:${encodeURIComponent(guid)}&fq=-occurrence_status%3A%22absent%22&fq=${UK_IRELAND_FILTER}&fq=year:${year}&pageSize=${PAGE_SIZE}&startIndex=${startIndex}`;
+      const response = await fetch(url);
+      const data = await response.json();
+      
+      if (!data.occurrences || data.occurrences.length === 0) break;
+      
+      const occurrences = data.occurrences.map(occ => ({
+        year: parseInt(occ.year),
+        month: occ.month,
+        decimalLatitude: occ.decimalLatitude,
+        decimalLongitude: occ.decimalLongitude,
+        stateProvince: occ.stateProvince,
+        basisOfRecord: occ.basisOfRecord,
+        scientificName: occ.scientificName,
+        vernacularName: occ.vernacularName
+      }));
+      
+      allOccurrences = allOccurrences.concat(occurrences);
+      startIndex += PAGE_SIZE;
+      
+      if (data.occurrences.length < PAGE_SIZE) break;
+    }
+    
+    res.json({
+      year: parseInt(year),
+      count: allOccurrences.length,
+      occurrences: allOccurrences
+    });
+  } catch (error) {
+    console.error('Error fetching year occurrences:', error);
+    res.status(500).json({ error: 'Failed to fetch year occurrences' });
+  }
+});
+
 // Serve main page (SPA handles routing)
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
