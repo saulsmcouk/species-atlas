@@ -8,6 +8,9 @@ const PORT = process.env.PORT || 3000;
 const SPECIES_API = 'https://species-ws.nbnatlas.org';
 const RECORDS_API = 'https://records-ws.nbnatlas.org';
 
+// Filter to UK and Ireland only
+const UK_IRELAND_FILTER = 'country:%22United%20Kingdom%20of%20Great%20Britain%20and%20Northern%20Ireland%22%20OR%20country:%22Ireland%22%20OR%20country:%22Isle%20of%20Man%22';
+
 // Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -79,7 +82,7 @@ app.get('/api/species/:guid', async (req, res) => {
 app.get('/api/species/:guid/facets', async (req, res) => {
   try {
     const guid = encodeURIComponent(req.params.guid);
-    const url = `${RECORDS_API}/occurrences/search?q=lsid:${guid}&fq=-occurrence_status%3A%22absent%22&pageSize=0&facets=year,month,stateProvince&facet=true&flimit=200`;
+    const url = `${RECORDS_API}/occurrences/search?q=lsid:${guid}&fq=-occurrence_status%3A%22absent%22&fq=${UK_IRELAND_FILTER}&pageSize=0&facets=year,month,stateProvince&facet=true&flimit=200`;
     
     const response = await fetch(url);
     const data = await response.json();
@@ -101,7 +104,7 @@ app.get('/api/species/:guid/occurrences', async (req, res) => {
     const maxRecords = parseInt(req.query.max) || 50000; // Safety limit
     
     // First get available years from facets
-    const facetsUrl = `${RECORDS_API}/occurrences/search?q=lsid:${encodeURIComponent(guid)}&fq=-occurrence_status%3A%22absent%22&pageSize=0&facets=year&facet=true&flimit=200`;
+    const facetsUrl = `${RECORDS_API}/occurrences/search?q=lsid:${encodeURIComponent(guid)}&fq=-occurrence_status%3A%22absent%22&fq=${UK_IRELAND_FILTER}&pageSize=0&facets=year&facet=true&flimit=200`;
     const facetsResponse = await fetch(facetsUrl);
     const facetsData = await facetsResponse.json();
     
@@ -124,7 +127,7 @@ app.get('/api/species/:guid/occurrences', async (req, res) => {
       
       let startIndex = 0;
       while (true) {
-        const url = `${RECORDS_API}/occurrences/search?q=lsid:${encodeURIComponent(guid)}&fq=-occurrence_status%3A%22absent%22&fq=year:${year}&pageSize=${PAGE_SIZE}&startIndex=${startIndex}`;
+        const url = `${RECORDS_API}/occurrences/search?q=lsid:${encodeURIComponent(guid)}&fq=-occurrence_status%3A%22absent%22&fq=${UK_IRELAND_FILTER}&fq=year:${year}&pageSize=${PAGE_SIZE}&startIndex=${startIndex}`;
         const response = await fetch(url);
         const data = await response.json();
         
