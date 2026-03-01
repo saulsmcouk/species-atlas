@@ -17,6 +17,26 @@ An interactive data visualization for exploring any species from the [NBN Atlas]
   - Limit by record count (10k, 25k, 50k, 100k)
   - Load all records with progress tracking
 
+## Screenshots
+
+### Landing Page
+![Landing Page](screens/landing.png)
+
+### Interactive Map
+![Interactive Map](screens/map.png)
+
+### Timeline Visualization
+![Timeline](screens/timeline.png)
+
+### Seasonal Wheel
+![Seasonal Wheel](screens/seasonal-wheel.png)
+
+### Key Insights
+![Insights](screens/insights.png)
+
+### Data Explorer
+![Data Explorer](screens/explorer.png)
+
 ## Quick Start
 
 ```bash
