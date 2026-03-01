@@ -431,6 +431,55 @@ section {
   overflow: hidden;
 }
 
+#uk-map {
+  width: 100%;
+  height: 100%;
+  min-height: 500px;
+  border-radius: 17px;
+}
+
+/* Leaflet custom styling */
+.leaflet-container {
+  background: var(--feather-cream);
+  font-family: var(--font-body);
+}
+
+.leaflet-tile-pane {
+  filter: sepia(20%) saturate(90%) brightness(105%);
+}
+
+.leaflet-popup-content-wrapper {
+  background: var(--parchment);
+  border: 2px solid var(--golden-amber);
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(93, 78, 55, 0.2);
+}
+
+.leaflet-popup-content {
+  font-family: var(--font-body);
+  color: var(--sepia-ink);
+  margin: 12px 16px;
+}
+
+.leaflet-popup-tip {
+  background: var(--parchment);
+  border: 2px solid var(--golden-amber);
+}
+
+/* Custom marker clusters */
+.marker-cluster {
+  background: rgba(160, 82, 45, 0.4);
+  border-radius: 50%;
+}
+
+.marker-cluster div {
+  background: var(--burnt-sienna);
+  color: var(--parchment);
+  font-family: var(--font-data);
+  font-size: 12px;
+  border-radius: 50%;
+}
+
 .uk-map-svg {
   width: 100%;
   height: 100%;
@@ -855,6 +904,124 @@ section {
   background: linear-gradient(90deg, var(--burnt-sienna), var(--golden-amber));
   border-radius: 3px;
   transition: width 1s var(--ease-out-expo);
+}
+
+/* ==========================================================================
+   Insights Section
+   ========================================================================== */
+.insights-section {
+  background: linear-gradient(
+    180deg,
+    var(--parchment) 0%,
+    var(--feather-cream) 50%,
+    var(--parchment-dark) 100%
+  );
+}
+
+.insights-grid {
+  max-width: 1200px;
+  margin: 0 auto var(--space-lg);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-md);
+}
+
+@media (max-width: 900px) {
+  .insights-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .insights-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.insight-card {
+  background: var(--parchment);
+  border: 2px solid var(--golden-amber);
+  border-radius: 16px;
+  padding: var(--space-md);
+  text-align: center;
+  transition: all 0.4s var(--ease-out-expo);
+  position: relative;
+  overflow: hidden;
+}
+
+.insight-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--burnt-sienna), var(--golden-amber));
+}
+
+.insight-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 20px 40px rgba(93, 78, 55, 0.15);
+}
+
+.insight-icon {
+  font-size: 2.5rem;
+  margin-bottom: var(--space-sm);
+}
+
+.insight-value {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 4vw, 3rem);
+  font-weight: 700;
+  color: var(--burnt-sienna);
+  line-height: 1.1;
+  margin-bottom: var(--space-xs);
+}
+
+.insight-label {
+  font-family: var(--font-body);
+  font-size: 1rem;
+  color: var(--sepia-light);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: var(--space-sm);
+}
+
+.insight-detail {
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  color: var(--sepia-ink);
+  line-height: 1.5;
+  opacity: 0.85;
+}
+
+/* Story block */
+.insight-story {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: var(--space-lg);
+  background: rgba(160, 82, 45, 0.05);
+  border-radius: 20px;
+  border-left: 4px solid var(--burnt-sienna);
+}
+
+.insight-story h3 {
+  font-family: var(--font-display);
+  font-size: 1.8rem;
+  color: var(--sepia-ink);
+  margin-bottom: var(--space-md);
+}
+
+.insight-story p {
+  font-family: var(--font-body);
+  font-size: 1.1rem;
+  line-height: 1.8;
+  color: var(--sepia-ink);
+  margin-bottom: var(--space-md);
+}
+
+.insight-story p:last-child {
+  margin-bottom: 0;
 }
 
 /* ==========================================================================

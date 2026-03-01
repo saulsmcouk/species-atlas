@@ -24,7 +24,6 @@ class WoodlarkApp {
       this.initMap();
       this.initTimeline();
       this.initSeasonalWheel();
-      this.initDataSources();
       this.initScrollAnimations();
     } catch (error) {
       console.error('Failed to initialize app:', error);
@@ -128,14 +127,30 @@ class WoodlarkApp {
   }
   
   // =========================================
-  // Interactive UK Map
+  // Interactive UK Map with Leaflet
   // =========================================
   initMap() {
-    const mapWrapper = document.getElementById('uk-map');
-    if (!mapWrapper) return;
+    const mapContainer = document.getElementById('uk-map');
+    if (!mapContainer) return;
     
-    // Create SVG map with occurrence dots
-    this.createMapVisualization(mapWrapper);
+    // Initialize Leaflet map centered on UK
+    this.map = L.map('uk-map', {
+      center: [54.5, -2.5],
+      zoom: 5,
+      minZoom: 5,
+      maxZoom: 12,
+      zoomControl: true,
+      scrollWheelZoom: true
+    });
+    
+    // Add OpenStreetMap tiles with a warm, natural style
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      opacity: 0.85
+    }).addTo(this.map);
+    
+    // Create a layer group for occurrence markers
+    this.markersLayer = L.layerGroup().addTo(this.map);
     
     // Year slider
     const yearSlider = document.getElementById('year-slider');
@@ -155,82 +170,21 @@ class WoodlarkApp {
           this.currentYear = this.years[idx];
           yearDisplay.textContent = this.currentYear;
         }
-        this.updateMapDots();
+        this.updateMapMarkers();
         this.updateRegionStats();
       });
     }
     
+    // Initial markers
+    this.updateMapMarkers();
     this.updateRegionStats();
   }
   
-  createMapVisualization(container) {
-    // UK bounding box (approximate)
-    const ukBounds = {
-      minLat: 49.5,
-      maxLat: 61,
-      minLng: -8.5,
-      maxLng: 2
-    };
+  updateMapMarkers() {
+    if (!this.markersLayer) return;
     
-    const width = 400;
-    const height = 600;
-    
-    // Project coordinates to SVG space
-    const projectLat = (lat) => {
-      const normalized = (ukBounds.maxLat - lat) / (ukBounds.maxLat - ukBounds.minLat);
-      return normalized * height * 0.9 + height * 0.05;
-    };
-    
-    const projectLng = (lng) => {
-      const normalized = (lng - ukBounds.minLng) / (ukBounds.maxLng - ukBounds.minLng);
-      return normalized * width * 0.9 + width * 0.05;
-    };
-    
-    // Create SVG
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-    svg.setAttribute('class', 'uk-map-svg');
-    
-    // Add UK outline using geographic coordinates (simplified Great Britain + Ireland outline)
-    const ukCoords = this.getUKCoordinates();
-    
-    // Convert geographic coords to SVG path
-    ukCoords.forEach((region, idx) => {
-      const pathData = region.map((point, i) => {
-        const x = projectLng(point[1]);
-        const y = projectLat(point[0]);
-        return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`;
-      }).join(' ') + ' Z';
-      
-      const outline = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      outline.setAttribute('d', pathData);
-      outline.setAttribute('fill', '#EDE6D6');
-      outline.setAttribute('stroke', '#A0522D');
-      outline.setAttribute('stroke-width', '1.5');
-      outline.setAttribute('class', 'uk-region');
-      svg.appendChild(outline);
-    });
-    
-    // Create dots group (on top of the map)
-    this.dotsGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    this.dotsGroup.setAttribute('class', 'occurrence-dots');
-    svg.appendChild(this.dotsGroup);
-    
-    // Store projection functions
-    this.projectLat = projectLat;
-    this.projectLng = projectLng;
-    
-    container.appendChild(svg);
-    
-    // Initial dots
-    this.updateMapDots();
-  }
-  
-  updateMapDots() {
-    if (!this.dotsGroup) return;
-    
-    // Clear existing dots
-    this.dotsGroup.innerHTML = '';
+    // Clear existing markers
+    this.markersLayer.clearLayers();
     
     // Get occurrences for current year
     let occurrences;
@@ -240,28 +194,39 @@ class WoodlarkApp {
       occurrences = this.yearData[this.currentYear] || [];
     }
     
-    // Sample for performance (show up to 2000 dots)
-    const sampleSize = Math.min(occurrences.length, 2000);
+    // Custom icon for woodlark sightings
+    const woodlarkIcon = L.divIcon({
+      className: 'woodlark-marker',
+      html: '<div class="marker-dot"></div>',
+      iconSize: [10, 10],
+      iconAnchor: [5, 5]
+    });
+    
+    // Sample for performance (show up to 3000 markers)
+    const sampleSize = Math.min(occurrences.length, 3000);
     const step = Math.max(1, Math.floor(occurrences.length / sampleSize));
     
     for (let i = 0; i < occurrences.length; i += step) {
       const occ = occurrences[i];
       if (occ.decimalLatitude && occ.decimalLongitude) {
-        const x = this.projectLng(occ.decimalLongitude);
-        const y = this.projectLat(occ.decimalLatitude);
+        const marker = L.circleMarker([occ.decimalLatitude, occ.decimalLongitude], {
+          radius: 4,
+          fillColor: '#A0522D',
+          color: '#5D4E37',
+          weight: 1,
+          opacity: 0.8,
+          fillOpacity: 0.6
+        });
         
-        // Only add if within reasonable bounds
-        if (x > 0 && x < 400 && y > 0 && y < 600) {
-          const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-          dot.setAttribute('cx', x);
-          dot.setAttribute('cy', y);
-          dot.setAttribute('r', '3');
-          dot.setAttribute('class', 'occurrence-dot');
-          dot.setAttribute('data-species', occ.vernacularName || occ.scientificName);
-          dot.setAttribute('data-year', occ.year);
-          
-          this.dotsGroup.appendChild(dot);
-        }
+        // Add popup with occurrence info
+        const popupContent = `
+          <strong>${occ.vernacularName || occ.scientificName}</strong><br>
+          <span style="color: #8B7355;">Year: ${occ.year || 'Unknown'}</span><br>
+          <span style="color: #8B7355;">${occ.stateProvince || ''}</span>
+        `;
+        marker.bindPopup(popupContent);
+        
+        this.markersLayer.addLayer(marker);
       }
     }
   }
@@ -296,52 +261,6 @@ class WoodlarkApp {
         <span class="region-count">${count.toLocaleString()}</span>
       </div>
     `).join('');
-  }
-  
-  getUKCoordinates() {
-    // Simplified UK outline coordinates [lat, lng] - Great Britain main island
-    const greatBritain = [
-      // Start SW Cornwall, go clockwise
-      [50.07, -5.71], [50.15, -5.07], [50.37, -4.67], [50.55, -4.19], 
-      [50.35, -3.55], [50.60, -2.98], [50.72, -1.95], [50.77, -1.30],
-      [50.74, -0.77], [50.90, 0.25], [50.96, 0.97], [51.10, 1.35],
-      // East coast going north  
-      [51.38, 1.42], [51.75, 1.29], [51.88, 1.08], [52.08, 1.63],
-      [52.48, 1.76], [52.95, 1.47], [53.08, 0.34], [53.33, 0.08],
-      [53.75, -0.12], [54.09, -0.17], [54.50, -0.61], [54.65, -1.17],
-      [55.00, -1.42], [55.45, -1.55], [55.77, -1.82], [55.98, -2.03],
-      // Scottish east coast
-      [56.20, -2.52], [56.47, -2.95], [56.71, -2.48], [57.00, -2.07],
-      [57.42, -1.78], [57.69, -1.85], [58.00, -3.02], [58.44, -3.10],
-      [58.62, -3.55], [58.55, -4.43], [58.32, -4.80],
-      // North Scotland
-      [58.60, -4.98], [58.45, -5.10], [57.90, -5.20], [57.53, -5.63],
-      [57.27, -5.80], [57.00, -5.85], [56.73, -6.10], [56.50, -5.67],
-      // West Scotland  
-      [56.23, -5.50], [55.90, -5.38], [55.58, -4.85], [55.43, -4.90],
-      [55.00, -5.05], [54.70, -5.10], [54.50, -4.62], [54.22, -4.38],
-      // Irish Sea coast
-      [54.05, -4.50], [53.42, -4.35], [53.32, -4.55], [53.22, -4.12],
-      [53.10, -4.08], [52.90, -4.47], [52.60, -4.15], [52.27, -4.08],
-      [51.87, -4.95], [51.68, -5.03], [51.55, -4.22], [51.45, -3.20],
-      [51.38, -3.43], [51.20, -3.15],
-      // Bristol Channel & South Wales
-      [51.18, -4.20], [51.00, -4.18], [50.77, -3.60], [50.50, -3.52],
-      [50.35, -4.12], [50.23, -4.78], [50.07, -5.71]
-    ];
-    
-    // Ireland outline (simplified)
-    const ireland = [
-      [51.45, -10.00], [51.78, -10.20], [52.15, -10.35], [52.55, -9.90],
-      [53.05, -9.55], [53.32, -9.85], [53.52, -10.05], [53.85, -9.70],
-      [54.22, -10.02], [54.47, -8.42], [55.05, -8.10], [55.25, -7.42],
-      [55.38, -6.95], [55.20, -6.10], [54.95, -5.88], [54.65, -5.70],
-      [54.40, -5.95], [54.10, -6.35], [53.75, -6.10], [53.42, -6.05],
-      [53.20, -6.10], [52.95, -6.05], [52.55, -6.35], [52.15, -6.95],
-      [51.85, -7.55], [51.55, -8.55], [51.45, -9.50], [51.45, -10.00]
-    ];
-    
-    return [greatBritain, ireland];
   }
   
   // =========================================
@@ -594,32 +513,6 @@ class WoodlarkApp {
           <div class="season-name">${season.name}</div>
           <div class="season-months">${season.months}</div>
           <div class="season-count">${count.toLocaleString()} sightings</div>
-        </div>
-      `;
-    }).join('');
-  }
-  
-  // =========================================
-  // Data Sources
-  // =========================================
-  initDataSources() {
-    const container = document.getElementById('data-sources');
-    if (!container) return;
-    
-    const dataResourceFacet = this.summary.facets?.find(f => f.fieldName === 'data_resource_uid');
-    if (!dataResourceFacet) return;
-    
-    const maxCount = Math.max(...dataResourceFacet.fieldResult.map(r => r.count));
-    
-    container.innerHTML = dataResourceFacet.fieldResult.slice(0, 8).map(resource => {
-      const widthPercent = (resource.count / maxCount) * 100;
-      return `
-        <div class="source-card">
-          <div class="source-name">${resource.label}</div>
-          <div class="source-count">${resource.count.toLocaleString()}</div>
-          <div class="source-bar">
-            <div class="source-bar-fill" style="width: ${widthPercent}%"></div>
-          </div>
         </div>
       `;
     }).join('');
